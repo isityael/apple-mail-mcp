@@ -5,6 +5,27 @@ All notable changes to the Apple Mail MCP Server will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-03-05
+
+### Added
+- **IMAP-based inbox sorting** (`sort_inbox`): Sort emails into folders using IMAP with Proton Bridge support (SSL/STARTTLS/plain fallback)
+- **IMAP bulk move** (`imap_bulk_move`): Batch move emails between IMAP folders with RFC 6851 MOVE support
+- **Bulk move emails** (`bulk_move_emails`): AppleScript-based bulk move for folder merging and inbox triage
+- **CI/CD pipelines**: GitHub Actions (`.github/workflows/ci.yml`) and Woodpecker CI (`.woodpecker/`) with lint, format check, syntax/import validation, mcpb build, and release-on-tag
+- **CLAUDE.md**: Project instructions for Claude Code with architecture docs and development patterns
+
+### Changed
+- **Modular package refactoring**: Split monolithic `apple_mail_mcp.py` into `apple_mail_mcp/` package with `server.py`, `core.py`, `constants.py`, `imap.py`, and `tools/` submodules
+- **Core hardened**: Deduplicated AppleScript helpers into `core.py` (`get_mailbox_script()`, `recipients_script()`, `inbox_mailbox_script()`, `date_cutoff_script()`, `content_preview_script()`, `skip_folders_condition()`)
+- **Migrated to `pyproject.toml` + `uv sync`** from `requirements.txt`
+- Tool count updated to 29 (from 26)
+
+### Fixed
+- IMAP modified UTF-7 encoding for international mailbox names
+- IMAP config file support (`~/.config/apple-mail-mcp/imap.json`)
+- Multiple CI lint failures and Woodpecker YAML escaping issues
+- Ruff lint errors in `ui/dashboard.py`
+
 ## [1.6.0] - 2026-02-06
 
 ### Added
@@ -190,6 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History Summary
 
+- **v2.0.0** - Modular refactoring, IMAP sorting/bulk-move tools, CI/CD (GitHub Actions + Woodpecker), pyproject.toml migration
 - **v1.6.0** - CC/BCC on reply/forward, stdin-based AppleScript execution, interactive dashboard, README rewrite
 - **v1.5.0** - Advanced search tools (4 new tools: search_by_sender, search_all_accounts, search_email_content, get_newsletters)
 - **v1.4.0** - User preferences configuration
@@ -199,6 +221,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **v1.0.0** - Initial release with core functionality
 
 ## Upgrade Notes
+
+### Upgrading to 2.0.0
+- **Breaking**: Entry point is now `apple_mail_mcp/` package instead of monolithic `apple_mail_mcp.py`
+- **Breaking**: Dependencies managed via `pyproject.toml` + `uv sync` (replaces `requirements.txt`)
+- `start_mcp.sh` handles setup automatically
+- 3 new IMAP tools require IMAP config for Proton Bridge (`~/.config/apple-mail-mcp/imap.json` or env vars)
+- Rebuild `.mcpb` bundle to include new tools
 
 ### Upgrading to 1.6.0
 - No breaking changes
