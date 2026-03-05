@@ -5,16 +5,15 @@ Provides functions to create UI resources for the inbox dashboard.
 """
 
 import json
-import os
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any
 
 from mcp_ui_server import create_ui_resource
 
 
 def create_inbox_dashboard_ui(
-    accounts_data: Dict[str, int],
-    recent_emails: List[Dict[str, Any]]
+    accounts_data: dict[str, int],
+    recent_emails: list[dict[str, Any]]
 ) -> Any:
     """
     Create a UI resource for the Apple Mail inbox dashboard.
@@ -37,7 +36,7 @@ def create_inbox_dashboard_ui(
     template_path = Path(__file__).parent / "templates" / "dashboard.html"
 
     # Read the HTML template
-    with open(template_path, "r", encoding="utf-8") as f:
+    with open(template_path, encoding="utf-8") as f:
         template_content = f.read()
 
     # Serialize the data for injection into the template
