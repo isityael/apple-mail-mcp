@@ -1,0 +1,19 @@
+depends_on:
+  - lint
+  - check
+
+when:
+  - event: [push, pull_request]
+    branch: main
+
+steps:
+  - name: build-mcpb
+    image: debian:bookworm-slim
+    commands:
+      - apt-get update -qq && apt-get install -y -qq zip python3 > /dev/null
+      - bash apple-mail-mcpb/build-mcpb.sh
+
+  - name: verify-manifest
+    image: python:3.13-slim
+    commands:
+      - python3 -c "import json; m=json.load(open('apple-mail-mcpb/manifest.json')); n=len(m['tools']); assert n == 29, f'Expected 29 tools, got {n}'; print(f'OK: {n} tools in manifest')"

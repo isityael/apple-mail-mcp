@@ -1,0 +1,24 @@
+depends_on:
+  - lint
+  - check
+  - build
+
+when:
+  - event: tag
+    branch: main
+
+steps:
+  - name: build-mcpb
+    image: debian:bookworm-slim
+    commands:
+      - apt-get update -qq && apt-get install -y -qq zip python3 > /dev/null
+      - bash apple-mail-mcpb/build-mcpb.sh
+
+  - name: release
+    image: woodpeckerci/plugin-release
+    settings:
+      api_key:
+        from_secret: forgejo_token
+      files:
+        - "*.mcpb"
+      title: ${CI_COMMIT_TAG}

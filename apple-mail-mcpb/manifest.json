@@ -1,18 +1,18 @@
 {
   "dxt_version": "0.1",
   "name": "Apple Mail MCP",
-  "version": "1.6.0",
-  "description": "Natural language interface for Apple Mail with Email Management Expert Skill and Interactive UI Dashboard - comprehensive email management including advanced search, intelligent workflows, productivity strategies, status updates, thread views, draft management, statistics, export capabilities, and MCP Apps UI support",
+  "version": "2.0.0",
+  "description": "Natural language interface for Apple Mail - 29 email management tools including advanced search, intelligent workflows, bulk operations, IMAP sorting, statistics, export, and draft management",
   "author": {
-    "name": "Patrick Freyer"
+    "name": "isityael"
   },
   "license": "MIT",
-  "homepage": "https://github.com/patrickfreyer/apple-mail-mcp",
+  "homepage": "https://github.com/isityael/apple-mail-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/patrickfreyer/apple-mail-mcp.git"
+    "url": "https://github.com/isityael/apple-mail-mcp.git"
   },
-  "documentation": "https://github.com/patrickfreyer/apple-mail-mcp#readme",
+  "documentation": "https://github.com/isityael/apple-mail-mcp#readme",
   "user_config": {
     "user_preferences": {
       "type": "string",
@@ -38,15 +38,11 @@
   "tools": [
     {
       "name": "get_inbox_overview",
-      "description": "Get a comprehensive dashboard overview of your email inbox status across all accounts. Shows unread counts by account, mailbox structure with unread indicators, preview of 10 most recent emails, and provides AI-driven action suggestions (move emails, respond to messages, highlight action items, organize folders, etc.). Use this tool first to understand the overall inbox state before taking specific actions."
+      "description": "Get a comprehensive overview of your email inbox status across all accounts. Shows unread counts, mailbox structure, recent emails preview, and suggested actions."
     },
     {
       "name": "list_inbox_emails",
       "description": "List all emails from inbox across all accounts or a specific account. Filter by account name, limit number of emails, and filter read/unread status."
-    },
-    {
-      "name": "get_email_with_content",
-      "description": "Search for emails by subject keyword and return with full content preview. Search within specific account with configurable content length."
     },
     {
       "name": "get_unread_count",
@@ -65,60 +61,96 @@
       "description": "List all mailboxes (folders) for a specific account or all accounts. Shows folder structure with optional message counts (total and unread)."
     },
     {
-      "name": "move_email",
-      "description": "Move emails between mailboxes by searching for subject keywords. Supports nested mailboxes with path notation (e.g., 'Projects/Amplify Impact'). Includes safety limit on number of moves."
+      "name": "inbox_dashboard",
+      "description": "Get a structured dashboard view of your email inbox with per-account metrics, unread counts, and recent email summaries."
     },
     {
-      "name": "reply_to_email",
-      "description": "Reply to emails matching a subject keyword. Send reply with custom body and option to reply to all recipients."
+      "name": "get_email_with_content",
+      "description": "Search for emails by subject keyword and return with full content preview. Search within specific account with configurable content length."
+    },
+    {
+      "name": "search_emails",
+      "description": "Unified search tool - search emails with advanced filtering by subject, sender, date range, attachment presence, and read status. Can search within specific mailbox or across all mailboxes."
+    },
+    {
+      "name": "search_by_sender",
+      "description": "Find all emails from a specific sender across one or all accounts. Returns matching emails with metadata."
+    },
+    {
+      "name": "search_email_content",
+      "description": "Search email body content (and optionally subject) for a search term. Full-text search across messages."
+    },
+    {
+      "name": "get_newsletters",
+      "description": "Find newsletter and digest emails by detecting common patterns. Identifies subscription sources and frequency."
+    },
+    {
+      "name": "get_recent_from_sender",
+      "description": "Get recent emails from a specific sender with simple, human-friendly time filters (today, this week, etc.)."
+    },
+    {
+      "name": "get_email_thread",
+      "description": "Get an email conversation thread - all messages with the same or similar subject. Strips Re:/Fwd: prefixes to group related messages."
+    },
+    {
+      "name": "search_all_accounts",
+      "description": "Search across ALL email accounts at once by subject keyword. Cross-account search for finding emails anywhere."
     },
     {
       "name": "compose_email",
       "description": "Compose and send a new email from a specific account. Supports TO, CC, and BCC recipients with custom subject and body."
     },
     {
+      "name": "reply_to_email",
+      "description": "Reply to an email matching a subject keyword. Send reply with custom body and option to reply to all recipients."
+    },
+    {
+      "name": "forward_email",
+      "description": "Forward an email to one or more recipients. Optionally prepend a custom message to the forwarded content. Search within specific mailbox."
+    },
+    {
+      "name": "manage_drafts",
+      "description": "Manage draft emails with four actions: list (show all drafts), create (save new draft), send (send existing draft by subject), and delete (remove draft by subject). Supports full email composition parameters."
+    },
+    {
+      "name": "move_email",
+      "description": "Move email(s) matching a subject keyword from one mailbox to another. Supports nested mailboxes with path notation (e.g., 'Projects/ClientName'). Includes safety limit on number of moves (default: 1)."
+    },
+    {
+      "name": "bulk_move_emails",
+      "description": "Move all emails (or emails matching a sender) from one mailbox to another. Higher limits than move_email for batch operations like inbox triage and folder merging."
+    },
+    {
+      "name": "update_email_status",
+      "description": "Update email status in batch - mark as read/unread, flag/unflag messages. Search by subject keyword or sender within a specific mailbox. Safety limit default: 10."
+    },
+    {
+      "name": "save_email_attachment",
+      "description": "Save a specific attachment from an email to disk. Search by subject keyword and attachment name with configurable save path."
+    },
+    {
+      "name": "manage_trash",
+      "description": "Manage trash operations with three actions: move_to_trash (soft delete), delete_permanent (immediate deletion), and empty_trash (clear trash mailbox). Safety limit default: 5."
+    },
+    {
+      "name": "sort_inbox",
+      "description": "Sort inbox emails into folders by sender using IMAP. Fast rule-based sorting for Proton Bridge or other IMAP-accessible accounts."
+    },
+    {
+      "name": "imap_bulk_move",
+      "description": "Move emails between IMAP folders directly. Fast bulk move for Proton Bridge - useful for folder merging and inbox triage."
+    },
+    {
       "name": "list_email_attachments",
       "description": "List attachments for emails matching a subject keyword. Shows attachment names and sizes."
     },
     {
-      "name": "save_email_attachment",
-      "description": "Save a specific attachment from an email to disk. Search by subject keyword and attachment name."
-    },
-    {
-      "name": "search_emails",
-      "description": "Advanced unified email search with multiple filter options. Search by subject keyword, sender, attachment presence, read status, and date ranges. Can search within specific mailbox or across all mailboxes. Returns matching emails with optional content preview."
-    },
-    {
-      "name": "update_email_status",
-      "description": "Update email status in batch - mark as read/unread, flag/unflag messages. Search by subject keyword or sender within a specific mailbox. Includes safety limit on number of updates (default: 10)."
-    },
-    {
-      "name": "manage_trash",
-      "description": "Manage email deletion with three actions: move_to_trash (soft delete), delete_permanent (immediate deletion), and empty_trash (clear trash mailbox). Search by subject keyword or sender. Includes safety limits on deletions (default: 5)."
-    },
-    {
-      "name": "forward_email",
-      "description": "Forward emails matching a subject keyword to specified recipients. Optionally prepend a custom message to the forwarded content. Search within specific mailbox."
-    },
-    {
-      "name": "get_email_thread",
-      "description": "View email conversation threads by finding all related messages. Searches by subject keyword and automatically groups messages with matching subjects (strips Re:, Fwd: prefixes). Shows thread across all mailboxes with configurable message limit."
-    },
-    {
-      "name": "manage_drafts",
-      "description": "Complete draft management with four actions: list (show all drafts), create (save new draft), send (send existing draft by subject), and delete (remove draft by subject). Supports full email composition parameters (TO, CC, BCC, subject, body)."
-    },
-    {
       "name": "get_statistics",
-      "description": "Comprehensive email analytics with three scopes: account_overview (total emails, read/unread ratios, flagged count, top senders, mailbox distribution), sender_stats (detailed stats for specific sender), and mailbox_breakdown (stats for specific mailbox). Configurable time range with days_back parameter."
+      "description": "Get comprehensive email statistics and analytics with three scopes: account_overview, sender_stats, and mailbox_breakdown. Configurable time range."
     },
     {
       "name": "export_emails",
-      "description": "Export emails to txt or html files. Two scopes: single_email (export one email by subject keyword) or entire_mailbox (export all emails from a mailbox to a directory). Configurable save location and format (txt/html)."
-    },
-    {
-      "name": "inbox_dashboard",
-      "description": "Get an interactive UI dashboard view of your email inbox. Returns a UIResource that renders in MCP Apps-compatible clients (like Claude Desktop). Shows account cards with unread counts, recent emails list with action buttons (Mark Read, Archive, Delete), and search functionality. Requires mcp-ui-server package."
+      "description": "Export emails to txt or html files. Two scopes: single_email (export one email by subject keyword) or entire_mailbox (export all emails from a mailbox to a directory)."
     }
   ],
   "prompts": []
