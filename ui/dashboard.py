@@ -11,10 +11,7 @@ from typing import Any
 from mcp_ui_server import create_ui_resource
 
 
-def create_inbox_dashboard_ui(
-    accounts_data: dict[str, int],
-    recent_emails: list[dict[str, Any]]
-) -> Any:
+def create_inbox_dashboard_ui(accounts_data: dict[str, int], recent_emails: list[dict[str, Any]]) -> Any:
     """
     Create a UI resource for the Apple Mail inbox dashboard.
 
@@ -45,19 +42,14 @@ def create_inbox_dashboard_ui(
 
     # Inject data into the template
     html_content = template_content.replace(
-        "/* ACCOUNTS_DATA_PLACEHOLDER */",
-        f"const accountsData = {accounts_json};"
-    ).replace(
-        "/* EMAILS_DATA_PLACEHOLDER */",
-        f"const recentEmails = {emails_json};"
-    )
+        "/* ACCOUNTS_DATA_PLACEHOLDER */", f"const accountsData = {accounts_json};"
+    ).replace("/* EMAILS_DATA_PLACEHOLDER */", f"const recentEmails = {emails_json};")
 
     # Create and return the UI resource
-    return create_ui_resource({
-        "uri": "ui://apple-mail/inbox-dashboard",
-        "content": {
-            "type": "rawHtml",
-            "htmlString": html_content
-        },
-        "encoding": "text"
-    })
+    return create_ui_resource(
+        {
+            "uri": "ui://apple-mail/inbox-dashboard",
+            "content": {"type": "rawHtml", "htmlString": html_content},
+            "encoding": "text",
+        }
+    )

@@ -3,11 +3,6 @@ when:
     branch: main
 
 steps:
-  - name: install
-    image: ghcr.io/astral-sh/uv:python3.13-bookworm
-    commands:
-      - uv sync --frozen
-
   - name: ruff-check
     image: ghcr.io/astral-sh/uv:python3.13-bookworm
     commands:
@@ -17,5 +12,4 @@ steps:
   - name: ruff-format
     image: ghcr.io/astral-sh/uv:python3.13-bookworm
     commands:
-      - uv sync --frozen
       - uv run ruff format --check .

@@ -12,7 +12,6 @@ steps:
   - name: verify-tools
     image: ghcr.io/astral-sh/uv:python3.13-bookworm
     commands:
-      - uv sync --frozen
       - |
         uv run python << 'PYEOF'
         from apple_mail_mcp import mcp
