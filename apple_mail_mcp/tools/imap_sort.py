@@ -5,17 +5,13 @@ import logging
 import os
 import time
 from collections import defaultdict
-from typing import Optional
 
-from apple_mail_mcp.server import mcp
-from apple_mail_mcp.core import inject_preferences
 from apple_mail_mcp import imap as imap_backend
-
+from apple_mail_mcp.core import inject_preferences
+from apple_mail_mcp.server import mcp
 
 # Default rules config path
-DEFAULT_RULES_PATH = os.path.expanduser(
-    "~/.config/apple-mail-mcp/sort_rules.json"
-)
+DEFAULT_RULES_PATH = os.path.expanduser("~/.config/apple-mail-mcp/sort_rules.json")
 
 # Log file for real-time progress (tail -f this)
 LOG_PATH = "/tmp/apple-mail-mcp-sort.log"
@@ -28,7 +24,7 @@ _handler.setFormatter(logging.Formatter("%(asctime)s  %(message)s", datefmt="%H:
 _logger.addHandler(_handler)
 
 
-def _load_rules(rules_path: Optional[str] = None) -> list[tuple[str, str]]:
+def _load_rules(rules_path: str | None = None) -> list[tuple[str, str]]:
     """Load sorting rules from a JSON config file.
 
     Expected format:
@@ -50,7 +46,7 @@ def _load_rules(rules_path: Optional[str] = None) -> list[tuple[str, str]]:
     return [(r["match"], r["folder"]) for r in data.get("rules", [])]
 
 
-def _match_rule(from_header: str, rules: list[tuple[str, str]]) -> Optional[str]:
+def _match_rule(from_header: str, rules: list[tuple[str, str]]) -> str | None:
     """Return the destination folder for a From header, or None."""
     for pattern, destination in rules:
         if pattern.lower() in from_header:
@@ -64,7 +60,7 @@ def sort_inbox(
     dry_run: bool = True,
     max_emails: int = 0,
     batch_size: int = 0,
-    rules_path: Optional[str] = None,
+    rules_path: str | None = None,
     create_folders: bool = True,
 ) -> str:
     """
@@ -115,9 +111,7 @@ def sort_inbox(
     _logger.info("INBOX SORT started (%s)", mode)
 
     try:
-        conn = imap_backend.connect(
-            config["host"], config["port"], config["user"], config["password"]
-        )
+        conn = imap_backend.connect(config["host"], config["port"], config["user"], config["password"])
     except Exception as e:
         _logger.error("Connection failed: %s", e)
         return f"Error connecting to IMAP: {e}"
@@ -135,11 +129,7 @@ def sort_inbox(
 
         # Create missing folders
         if create_folders:
-            missing = {
-                human: imap_path
-                for human, imap_path in dest_map.items()
-                if imap_path not in existing
-            }
+            missing = {human: imap_path for human, imap_path in dest_map.items() if imap_path not in existing}
             if missing:
                 lines.append("── Folder creation ──")
                 for human in sorted(missing):
@@ -218,7 +208,14 @@ def sort_inbox(
                     lines.append(f"  {full_count:>5}  → {dest}")
 
         lines.append("")
-        lines.append(f"  {move_count:>5}  to move" + (f" (of {total_matched - sum(1 for d,_ in [(d,u) for d,u in all_moves if d == 'Trash'] )})" if batch_size and len(all_moves) < total_matched else ""))
+        lines.append(
+            f"  {move_count:>5}  to move"
+            + (
+                f" (of {total_matched - sum(1 for d, _ in [(d, u) for d, u in all_moves if d == 'Trash'])})"
+                if batch_size and len(all_moves) < total_matched
+                else ""
+            )
+        )
         lines.append(f"  {trash_count:>5}  to trash")
         lines.append(f"  {unmatched:>5}  no match (stay in INBOX)")
         if batch_size and len(all_moves) < total_matched:
@@ -227,8 +224,7 @@ def sort_inbox(
         if dry_run:
             lines.append("")
             lines.append("Dry run complete. Set dry_run=False to execute.")
-            _logger.info("Dry run: %d to move, %d to trash, %d unmatched",
-                         move_count, trash_count, unmatched)
+            _logger.info("Dry run: %d to move, %d to trash, %d unmatched", move_count, trash_count, unmatched)
             return "\n".join(lines)
 
         # Execute moves
@@ -292,8 +288,10 @@ def sort_inbox(
         elapsed = time.time() - t0
 
         lines.append("")
-        lines.append(f"✓ Done in {elapsed:.1f}s — moved {succeeded}, trashed {trash_count}" +
-                     (f", {failed} failed" if failed else ""))
+        lines.append(
+            f"✓ Done in {elapsed:.1f}s — moved {succeeded}, trashed {trash_count}"
+            + (f", {failed} failed" if failed else "")
+        )
         if batch_size and len(all_moves) < total_matched:
             remaining = total_matched - len(all_moves)
             lines.append(f"  {remaining} emails remaining — call sort_inbox again for next batch")
@@ -314,7 +312,7 @@ def sort_inbox(
 def imap_bulk_move(
     from_mailbox: str,
     to_mailbox: str,
-    sender: Optional[str] = None,
+    sender: str | None = None,
     max_moves: int = 100,
     dry_run: bool = True,
 ) -> str:
@@ -344,9 +342,7 @@ def imap_bulk_move(
         )
 
     try:
-        conn = imap_backend.connect(
-            config["host"], config["port"], config["user"], config["password"]
-        )
+        conn = imap_backend.connect(config["host"], config["port"], config["user"], config["password"])
     except Exception as e:
         return f"Error connecting to IMAP: {e}"
 
@@ -354,8 +350,7 @@ def imap_bulk_move(
     lines.append(f"IMAP BULK MOVE{' (DRY RUN)' if dry_run else ''}")
     lines.append(f"{from_mailbox} → {to_mailbox}")
 
-    _logger.info("BULK MOVE: %s → %s%s", from_mailbox, to_mailbox,
-                 " (dry run)" if dry_run else "")
+    _logger.info("BULK MOVE: %s → %s%s", from_mailbox, to_mailbox, " (dry run)" if dry_run else "")
 
     try:
         # Resolve folder names to IMAP paths

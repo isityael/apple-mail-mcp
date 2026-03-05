@@ -1,9 +1,14 @@
 """Composition tools: sending, replying, forwarding, and drafts."""
 
-from typing import Optional
-
+from apple_mail_mcp.core import (
+    escape_applescript,
+    get_mailbox_script,
+    inbox_mailbox_script,
+    inject_preferences,
+    recipients_script,
+    run_applescript,
+)
 from apple_mail_mcp.server import mcp
-from apple_mail_mcp.core import inject_preferences, escape_applescript, run_applescript, inbox_mailbox_script
 
 
 @mcp.tool()
@@ -13,8 +18,8 @@ def reply_to_email(
     subject_keyword: str,
     reply_body: str,
     reply_to_all: bool = False,
-    cc: Optional[str] = None,
-    bcc: Optional[str] = None
+    cc: str | None = None,
+    bcc: str | None = None,
 ) -> str:
     """
     Reply to an email matching a subject keyword.
@@ -38,30 +43,12 @@ def reply_to_email(
 
     # Build the reply command based on reply_to_all flag
     if reply_to_all:
-        reply_command = 'set replyMessage to reply foundMessage with opening window reply to all'
+        reply_command = "set replyMessage to reply foundMessage with opening window reply to all"
     else:
-        reply_command = 'set replyMessage to reply foundMessage with opening window'
+        reply_command = "set replyMessage to reply foundMessage with opening window"
 
-    # Build CC recipients if provided
-    cc_script = ''
-    if cc:
-        cc_addresses = [addr.strip() for addr in cc.split(',')]
-        for addr in cc_addresses:
-            safe_addr = escape_applescript(addr)
-            cc_script += f'''
-            make new cc recipient at end of cc recipients of replyMessage with properties {{address:"{safe_addr}"}}
-            '''
-
-    # Build BCC recipients if provided
-    bcc_script = ''
-    if bcc:
-        bcc_addresses = [addr.strip() for addr in bcc.split(',')]
-        for addr in bcc_addresses:
-            safe_addr = escape_applescript(addr)
-            bcc_script += f'''
-            make new bcc recipient at end of bcc recipients of replyMessage with properties {{address:"{safe_addr}"}}
-            '''
-
+    cc_script = recipients_script(cc, "cc", "replyMessage")
+    bcc_script = recipients_script(bcc, "bcc", "replyMessage")
     safe_cc = escape_applescript(cc) if cc else ""
     safe_bcc = escape_applescript(bcc) if bcc else ""
 
@@ -120,16 +107,16 @@ def reply_to_email(
     '''
 
     if cc:
-        script += f'''
+        script += f"""
                 set outputText to outputText & "CC: {safe_cc}" & return
-    '''
+    """
 
     if bcc:
-        script += f'''
+        script += f"""
                 set outputText to outputText & "BCC: {safe_bcc}" & return
-    '''
+    """
 
-    script += f'''
+    script += f"""
             else
                 set outputText to outputText & "⚠ No email found matching: {safe_subject_keyword}" & return
             end if
@@ -140,7 +127,7 @@ def reply_to_email(
 
         return outputText
     end tell
-    '''
+    """
 
     result = run_applescript(script)
     return result
@@ -148,14 +135,7 @@ def reply_to_email(
 
 @mcp.tool()
 @inject_preferences
-def compose_email(
-    account: str,
-    to: str,
-    subject: str,
-    body: str,
-    cc: Optional[str] = None,
-    bcc: Optional[str] = None
-) -> str:
+def compose_email(account: str, to: str, subject: str, body: str, cc: str | None = None, bcc: str | None = None) -> str:
     """
     Compose and send a new email from a specific account.
 
@@ -176,35 +156,9 @@ def compose_email(
     escaped_subject = escape_applescript(subject)
     escaped_body = escape_applescript(body)
 
-    # Build TO recipients (split comma-separated addresses)
-    to_script = ''
-    to_addresses = [addr.strip() for addr in to.split(',')]
-    for addr in to_addresses:
-        safe_addr = escape_applescript(addr)
-        to_script += f'''
-                make new to recipient at end of to recipients with properties {{address:"{safe_addr}"}}
-        '''
-
-    # Build CC recipients if provided
-    cc_script = ''
-    if cc:
-        cc_addresses = [addr.strip() for addr in cc.split(',')]
-        for addr in cc_addresses:
-            safe_addr = escape_applescript(addr)
-            cc_script += f'''
-                make new cc recipient at end of cc recipients with properties {{address:"{safe_addr}"}}
-            '''
-
-    # Build BCC recipients if provided
-    bcc_script = ''
-    if bcc:
-        bcc_addresses = [addr.strip() for addr in bcc.split(',')]
-        for addr in bcc_addresses:
-            safe_addr = escape_applescript(addr)
-            bcc_script += f'''
-                make new bcc recipient at end of bcc recipients with properties {{address:"{safe_addr}"}}
-            '''
-
+    to_script = recipients_script(to, "to")
+    cc_script = recipients_script(cc, "cc")
+    bcc_script = recipients_script(bcc, "bcc")
     safe_to = escape_applescript(to)
     safe_cc = escape_applescript(cc) if cc else ""
     safe_bcc = escape_applescript(bcc) if bcc else ""
@@ -240,14 +194,14 @@ def compose_email(
     '''
 
     if cc:
-        script += f'''
+        script += f"""
             set outputText to outputText & "CC: {safe_cc}" & return
-    '''
+    """
 
     if bcc:
-        script += f'''
+        script += f"""
             set outputText to outputText & "BCC: {safe_bcc}" & return
-    '''
+    """
 
     script += f'''
             set outputText to outputText & "Subject: {escaped_subject}" & return
@@ -271,10 +225,10 @@ def forward_email(
     account: str,
     subject_keyword: str,
     to: str,
-    message: Optional[str] = None,
+    message: str | None = None,
     mailbox: str = "INBOX",
-    cc: Optional[str] = None,
-    bcc: Optional[str] = None
+    cc: str | None = None,
+    bcc: str | None = None,
 ) -> str:
     """
     Forward an email to one or more recipients.
@@ -296,40 +250,14 @@ def forward_email(
     safe_account = escape_applescript(account)
     safe_subject_keyword = escape_applescript(subject_keyword)
     safe_to = escape_applescript(to)
-    safe_mailbox = escape_applescript(mailbox)
+
     escaped_message = escape_applescript(message) if message else ""
 
-    # Build CC recipients if provided
-    cc_script = ''
-    if cc:
-        cc_addresses = [addr.strip() for addr in cc.split(',')]
-        for addr in cc_addresses:
-            safe_addr = escape_applescript(addr)
-            cc_script += f'''
-            make new cc recipient at end of cc recipients of forwardMessage with properties {{address:"{safe_addr}"}}
-            '''
-
-    # Build BCC recipients if provided
-    bcc_script = ''
-    if bcc:
-        bcc_addresses = [addr.strip() for addr in bcc.split(',')]
-        for addr in bcc_addresses:
-            safe_addr = escape_applescript(addr)
-            bcc_script += f'''
-            make new bcc recipient at end of bcc recipients of forwardMessage with properties {{address:"{safe_addr}"}}
-            '''
-
+    to_script = recipients_script(to, "to", "forwardMessage")
+    cc_script = recipients_script(cc, "cc", "forwardMessage")
+    bcc_script = recipients_script(bcc, "bcc", "forwardMessage")
     safe_cc = escape_applescript(cc) if cc else ""
     safe_bcc = escape_applescript(bcc) if bcc else ""
-
-    # Build TO recipients (split comma-separated)
-    to_script = ''
-    to_addresses = [addr.strip() for addr in to.split(',')]
-    for addr in to_addresses:
-        safe_addr = escape_applescript(addr)
-        to_script += f'''
-                make new to recipient at end of to recipients of forwardMessage with properties {{address:"{safe_addr}"}}
-        '''
 
     script = f'''
     tell application "Mail"
@@ -337,16 +265,7 @@ def forward_email(
 
         try
             set targetAccount to account "{safe_account}"
-            -- Try to get mailbox
-            try
-                set targetMailbox to mailbox "{safe_mailbox}" of targetAccount
-            on error
-                if "{safe_mailbox}" is "INBOX" then
-                    set targetMailbox to mailbox "Inbox" of targetAccount
-                else
-                    error "Mailbox not found: {safe_mailbox}"
-                end if
-            end try
+            {get_mailbox_script(mailbox, "targetMailbox")}
 
             set mailboxMessages to every message of targetMailbox
             set foundMessage to missing value
@@ -400,16 +319,16 @@ def forward_email(
     '''
 
     if cc:
-        script += f'''
+        script += f"""
                 set outputText to outputText & "CC: {safe_cc}" & return
-    '''
+    """
 
     if bcc:
-        script += f'''
+        script += f"""
                 set outputText to outputText & "BCC: {safe_bcc}" & return
-    '''
+    """
 
-    script += f'''
+    script += f"""
             else
                 set outputText to outputText & "⚠ No email found matching: {safe_subject_keyword}" & return
             end if
@@ -420,7 +339,7 @@ def forward_email(
 
         return outputText
     end tell
-    '''
+    """
 
     result = run_applescript(script)
     return result
@@ -431,12 +350,12 @@ def forward_email(
 def manage_drafts(
     account: str,
     action: str,
-    subject: Optional[str] = None,
-    to: Optional[str] = None,
-    body: Optional[str] = None,
-    cc: Optional[str] = None,
-    bcc: Optional[str] = None,
-    draft_subject: Optional[str] = None
+    subject: str | None = None,
+    to: str | None = None,
+    body: str | None = None,
+    cc: str | None = None,
+    bcc: str | None = None,
+    draft_subject: str | None = None,
 ) -> str:
     """
     Manage draft emails - list, create, send, or delete drafts.
@@ -497,34 +416,9 @@ def manage_drafts(
         escaped_body = escape_applescript(body)
         safe_to = escape_applescript(to)
 
-        # Build TO recipients (split comma-separated)
-        to_script = ''
-        to_addresses = [addr.strip() for addr in to.split(',')]
-        for addr in to_addresses:
-            safe_addr = escape_applescript(addr)
-            to_script += f'''
-                    make new to recipient at end of to recipients with properties {{address:"{safe_addr}"}}
-            '''
-
-        # Build CC recipients if provided
-        cc_script = ''
-        if cc:
-            cc_addresses = [addr.strip() for addr in cc.split(',')]
-            for addr in cc_addresses:
-                safe_addr = escape_applescript(addr)
-                cc_script += f'''
-                    make new cc recipient at end of cc recipients with properties {{address:"{safe_addr}"}}
-                '''
-
-        # Build BCC recipients if provided
-        bcc_script = ''
-        if bcc:
-            bcc_addresses = [addr.strip() for addr in bcc.split(',')]
-            for addr in bcc_addresses:
-                safe_addr = escape_applescript(addr)
-                bcc_script += f'''
-                    make new bcc recipient at end of bcc recipients with properties {{address:"{safe_addr}"}}
-                '''
+        to_script = recipients_script(to, "to", "newDraft")
+        cc_script = recipients_script(cc, "cc", "newDraft")
+        bcc_script = recipients_script(bcc, "bcc", "newDraft")
 
         script = f'''
         tell application "Mail"

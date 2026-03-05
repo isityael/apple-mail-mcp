@@ -1,19 +1,21 @@
 """Analytics tools: attachments, statistics, exports, and dashboard."""
 
 import os
-from typing import Optional, List, Dict, Any
+from typing import Any
 
+from apple_mail_mcp.core import (
+    escape_applescript,
+    get_mailbox_script,
+    inbox_mailbox_script,
+    inject_preferences,
+    run_applescript,
+)
 from apple_mail_mcp.server import mcp
-from apple_mail_mcp.core import inject_preferences, escape_applescript, run_applescript, inbox_mailbox_script
 
 
 @mcp.tool()
 @inject_preferences
-def list_email_attachments(
-    account: str,
-    subject_keyword: str,
-    max_results: int = 1
-) -> str:
+def list_email_attachments(account: str, subject_keyword: str, max_results: int = 1) -> str:
     """
     List attachments for emails matching a subject keyword.
 
@@ -103,9 +105,9 @@ def list_email_attachments(
 def get_statistics(
     account: str,
     scope: str = "account_overview",
-    sender: Optional[str] = None,
-    mailbox: Optional[str] = None,
-    days_back: int = 30
+    sender: str | None = None,
+    mailbox: str | None = None,
+    days_back: int = 30,
 ) -> str:
     """
     Get comprehensive email statistics and analytics.
@@ -129,10 +131,10 @@ def get_statistics(
     # Calculate date threshold if days_back > 0
     date_filter = ""
     if days_back > 0:
-        date_filter = f'''
+        date_filter = f"""
             set targetDate to (current date) - ({days_back} * days)
-        '''
-        date_check = 'and messageDate > targetDate'
+        """
+        date_check = "and messageDate > targetDate"
     else:
         date_filter = ""
         date_check = ""
@@ -334,15 +336,7 @@ def get_statistics(
 
             try
                 set targetAccount to account "{escaped_account}"
-                try
-                    set targetMailbox to mailbox "{mailbox_param}" of targetAccount
-                on error
-                    if "{mailbox_param}" is "INBOX" then
-                        set targetMailbox to mailbox "Inbox" of targetAccount
-                    else
-                        error "Mailbox not found"
-                    end if
-                end try
+                {get_mailbox_script(mailbox or "INBOX", "targetMailbox")}
 
                 set mailboxMessages to every message of targetMailbox
                 set totalMessages to count of mailboxMessages
@@ -372,10 +366,10 @@ def get_statistics(
 def export_emails(
     account: str,
     scope: str,
-    subject_keyword: Optional[str] = None,
+    subject_keyword: str | None = None,
     mailbox: str = "INBOX",
     save_directory: str = "~/Desktop",
-    format: str = "txt"
+    format: str = "txt",
 ) -> str:
     """
     Export emails to files for backup or analysis.
@@ -396,10 +390,14 @@ def export_emails(
     save_dir = os.path.expanduser(save_directory)
 
     # Escape all user inputs for AppleScript
+    import re
+
     safe_account = escape_applescript(account)
     safe_mailbox = escape_applescript(mailbox)
     safe_format = escape_applescript(format)
     safe_save_dir = escape_applescript(save_dir)
+    # Sanitize mailbox name for filesystem use — strip path separators and control chars
+    safe_mailbox_dirname = re.sub(r"[^\w\-. ]", "_", mailbox)[:64]
 
     if scope == "single_email":
         if not subject_keyword:
@@ -413,16 +411,7 @@ def export_emails(
 
             try
                 set targetAccount to account "{safe_account}"
-                -- Try to get mailbox
-                try
-                    set targetMailbox to mailbox "{safe_mailbox}" of targetAccount
-                on error
-                    if "{safe_mailbox}" is "INBOX" then
-                        set targetMailbox to mailbox "Inbox" of targetAccount
-                    else
-                        error "Mailbox not found: {safe_mailbox}"
-                    end if
-                end try
+                {get_mailbox_script(mailbox, "targetMailbox")}
 
                 set mailboxMessages to every message of targetMailbox
                 set foundMessage to missing value
@@ -503,23 +492,14 @@ def export_emails(
 
             try
                 set targetAccount to account "{safe_account}"
-                -- Try to get mailbox
-                try
-                    set targetMailbox to mailbox "{safe_mailbox}" of targetAccount
-                on error
-                    if "{safe_mailbox}" is "INBOX" then
-                        set targetMailbox to mailbox "Inbox" of targetAccount
-                    else
-                        error "Mailbox not found: {safe_mailbox}"
-                    end if
-                end try
+                {get_mailbox_script(mailbox, "targetMailbox")}
 
                 set mailboxMessages to every message of targetMailbox
                 set messageCount to count of mailboxMessages
                 set exportCount to 0
 
-                -- Create export directory
-                set exportDir to "{safe_save_dir}/{safe_mailbox}_export"
+                -- Create export directory (mailbox dir name sanitized in Python)
+                set exportDir to "{safe_save_dir}/{safe_mailbox_dirname}_export"
                 do shell script "mkdir -p " & quoted form of exportDir
 
                 repeat with aMessage in mailboxMessages
@@ -589,10 +569,7 @@ def export_emails(
     return result
 
 
-def _get_recent_emails_structured(
-    max_total: int = 20,
-    max_per_account: int = 10
-) -> List[Dict[str, Any]]:
+def _get_recent_emails_structured(max_total: int = 20, max_per_account: int = 10) -> list[dict[str, Any]]:
     """
     Internal helper to get recent emails from all accounts as structured data.
 
@@ -604,7 +581,7 @@ def _get_recent_emails_structured(
     - account: str
     - preview: str
     """
-    script = f'''
+    script = f"""
     tell application "Mail"
         set allEmails to {{}}
         set allAccounts to every account
@@ -659,26 +636,28 @@ def _get_recent_emails_structured(
         set AppleScript's text item delimiters to ""
         return emailOutput
     end tell
-    '''
+    """
 
     result = run_applescript(script)
 
     # Parse the result into structured data
     emails = []
     if result:
-        for line in result.split('\n'):
-            if '|||' in line:
+        for line in result.split("\n"):
+            if "|||" in line:
                 # Use maxsplit=5 so preview field (last) can contain '|||'
-                parts = line.split('|||', 5)
+                parts = line.split("|||", 5)
                 if len(parts) >= 5:
-                    emails.append({
-                        'subject': parts[0].strip(),
-                        'sender': parts[1].strip(),
-                        'date': parts[2].strip(),
-                        'is_read': parts[3].strip().lower() == 'true',
-                        'account': parts[4].strip(),
-                        'preview': parts[5].strip() if len(parts) > 5 else ''
-                    })
+                    emails.append(
+                        {
+                            "subject": parts[0].strip(),
+                            "sender": parts[1].strip(),
+                            "date": parts[2].strip(),
+                            "is_read": parts[3].strip().lower() == "true",
+                            "account": parts[4].strip(),
+                            "preview": parts[5].strip() if len(parts) > 5 else "",
+                        }
+                    )
 
     # Emails arrive in inbox order (newest first per account)
     # Limit to max_total
@@ -708,6 +687,7 @@ def inbox_dashboard() -> Any:
         an interactive HTML dashboard, or error message if UI is unavailable.
     """
     from apple_mail_mcp import UI_AVAILABLE
+
     if not UI_AVAILABLE:
         return "Error: UI module not available. Please install mcp-ui-server package."
 
@@ -718,13 +698,7 @@ def inbox_dashboard() -> Any:
     accounts_data = get_unread_count()
 
     # Get recent emails across all accounts as structured data
-    recent_emails = _get_recent_emails_structured(
-        max_total=20,
-        max_per_account=10
-    )
+    recent_emails = _get_recent_emails_structured(max_total=20, max_per_account=10)
 
     # Create and return the UI resource
-    return create_inbox_dashboard_ui(
-        accounts_data=accounts_data,
-        recent_emails=recent_emails
-    )
+    return create_inbox_dashboard_ui(accounts_data=accounts_data, recent_emails=recent_emails)

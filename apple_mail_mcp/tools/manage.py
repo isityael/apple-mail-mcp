@@ -1,20 +1,21 @@
 """Management tools: moving, status updates, trash, and attachments."""
 
 import os
-from typing import Optional
 
+from apple_mail_mcp.core import (
+    escape_applescript,
+    get_mailbox_script,
+    inbox_mailbox_script,
+    inject_preferences,
+    run_applescript,
+)
 from apple_mail_mcp.server import mcp
-from apple_mail_mcp.core import inject_preferences, escape_applescript, run_applescript, inbox_mailbox_script
 
 
 @mcp.tool()
 @inject_preferences
 def move_email(
-    account: str,
-    subject_keyword: str,
-    to_mailbox: str,
-    from_mailbox: str = "INBOX",
-    max_moves: int = 1
+    account: str, subject_keyword: str, to_mailbox: str, from_mailbox: str = "INBOX", max_moves: int = 1
 ) -> str:
     """
     Move email(s) matching a subject keyword from one mailbox to another.
@@ -37,17 +38,17 @@ def move_email(
     safe_to_mailbox = escape_applescript(to_mailbox)
 
     # Parse nested mailbox path
-    mailbox_parts = to_mailbox.split('/')
+    mailbox_parts = to_mailbox.split("/")
 
     # Build the nested mailbox reference
     if len(mailbox_parts) > 1:
         # Nested mailbox
-        dest_mailbox_script = f'mailbox "{escape_applescript(mailbox_parts[-1])}" of '
+        dest_get_mailbox_script = f'mailbox "{escape_applescript(mailbox_parts[-1])}" of '
         for i in range(len(mailbox_parts) - 2, -1, -1):
-            dest_mailbox_script += f'mailbox "{escape_applescript(mailbox_parts[i])}" of '
-        dest_mailbox_script += 'targetAccount'
+            dest_get_mailbox_script += f'mailbox "{escape_applescript(mailbox_parts[i])}" of '
+        dest_get_mailbox_script += "targetAccount"
     else:
-        dest_mailbox_script = f'mailbox "{safe_to_mailbox}" of targetAccount'
+        dest_get_mailbox_script = f'mailbox "{safe_to_mailbox}" of targetAccount'
 
     script = f'''
     tell application "Mail"
@@ -56,25 +57,19 @@ def move_email(
 
         try
             set targetAccount to account "{safe_account}"
-            -- Try to get source mailbox (handle both "INBOX"/"Inbox" variations)
-            try
-                set sourceMailbox to mailbox "{safe_from_mailbox}" of targetAccount
-            on error
-                if "{safe_from_mailbox}" is "INBOX" then
-                    set sourceMailbox to mailbox "Inbox" of targetAccount
-                else
-                    error "Source mailbox not found"
-                end if
-            end try
+            {get_mailbox_script(from_mailbox, "sourceMailbox")}
 
             -- Get destination mailbox (handles nested mailboxes)
-            set destMailbox to {dest_mailbox_script}
+            set destMailbox to {dest_get_mailbox_script}
             set sourceMessages to every message of sourceMailbox
+            set srcCount to count of sourceMessages
 
-            repeat with aMessage in sourceMessages
+            -- Iterate in reverse to avoid index shifting during move
+            repeat with i from srcCount to 1 by -1
                 if movedCount >= {max_moves} then exit repeat
 
                 try
+                    set aMessage to item i of sourceMessages
                     set messageSubject to subject of aMessage
 
                     -- Check if subject contains keyword (case insensitive)
@@ -114,11 +109,7 @@ def move_email(
 @mcp.tool()
 @inject_preferences
 def bulk_move_emails(
-    account: str,
-    from_mailbox: str,
-    to_mailbox: str,
-    sender: Optional[str] = None,
-    max_moves: int = 100
+    account: str, from_mailbox: str, to_mailbox: str, sender: str | None = None, max_moves: int = 100
 ) -> str:
     """
     Move all emails (or emails matching a sender) from one mailbox to another.
@@ -142,59 +133,60 @@ def bulk_move_emails(
     safe_to = escape_applescript(to_mailbox)
 
     # Build AppleScript to find a mailbox by iterating (works with Proton Bridge)
-    def build_find_mailbox_script(path: str, result_var: str) -> str:
-        parts = path.split('/')
+    def build_find_get_mailbox_script(path: str, result_var: str) -> str:
+        parts = path.split("/")
         escaped_parts = [escape_applescript(p) for p in parts]
         # First level: iterate top-level mailboxes of account
-        script_lines = [f'set {result_var} to missing value']
-        script_lines.append(f'repeat with aBox in (every mailbox of targetAccount)')
+        script_lines = [f"set {result_var} to missing value"]
+        script_lines.append("repeat with aBox in (every mailbox of targetAccount)")
         script_lines.append(f'    if name of aBox is "{escaped_parts[0]}" then')
         if len(parts) == 1:
-            script_lines.append(f'        set {result_var} to aBox')
+            script_lines.append(f"        set {result_var} to aBox")
         else:
             # Walk nested levels
             for depth, part in enumerate(escaped_parts[1:], 1):
-                indent = '        ' + '    ' * (depth - 1)
-                script_lines.append(f'{indent}repeat with subBox{depth} in (every mailbox of {"aBox" if depth == 1 else f"subBox{depth-1}"})')
+                indent = "        " + "    " * (depth - 1)
+                script_lines.append(
+                    f"{indent}repeat with subBox{depth} in (every mailbox of {'aBox' if depth == 1 else f'subBox{depth - 1}'})"
+                )
                 script_lines.append(f'{indent}    if name of subBox{depth} is "{part}" then')
                 if depth == len(parts) - 1:
-                    script_lines.append(f'{indent}        set {result_var} to subBox{depth}')
+                    script_lines.append(f"{indent}        set {result_var} to subBox{depth}")
                 # Close inner levels (will be closed below)
             # Close all nested levels in reverse
             for depth in range(len(parts) - 1, 0, -1):
-                indent = '        ' + '    ' * (depth - 1)
-                script_lines.append(f'{indent}    end if')
-                script_lines.append(f'{indent}end repeat')
-        script_lines.append('        exit repeat')
-        script_lines.append('    end if')
-        script_lines.append('end repeat')
-        script_lines.append(f'if {result_var} is missing value then error "Mailbox not found: {escape_applescript(path)}"')
-        return '\n            '.join(script_lines)
+                indent = "        " + "    " * (depth - 1)
+                script_lines.append(f"{indent}    end if")
+                script_lines.append(f"{indent}end repeat")
+        script_lines.append("        exit repeat")
+        script_lines.append("    end if")
+        script_lines.append("end repeat")
+        script_lines.append(
+            f'if {result_var} is missing value then error "Mailbox not found: {escape_applescript(path)}"'
+        )
+        return "\n            ".join(script_lines)
 
     # Handle INBOX specially (direct reference always works)
     if from_mailbox.upper() == "INBOX":
-        find_source = '''try
+        find_source = """try
                 set sourceMailbox to mailbox "INBOX" of targetAccount
             on error
                 set sourceMailbox to mailbox "Inbox" of targetAccount
-            end try'''
+            end try"""
     else:
-        find_source = build_find_mailbox_script(from_mailbox, 'sourceMailbox')
+        find_source = build_find_get_mailbox_script(from_mailbox, "sourceMailbox")
 
     if to_mailbox.upper() == "INBOX":
-        find_dest = '''try
+        find_dest = """try
                 set destMailbox to mailbox "INBOX" of targetAccount
             on error
                 set destMailbox to mailbox "Inbox" of targetAccount
-            end try'''
+            end try"""
     else:
-        find_dest = build_find_mailbox_script(to_mailbox, 'destMailbox')
+        find_dest = build_find_get_mailbox_script(to_mailbox, "destMailbox")
 
     # Build sender filter condition
-    if sender:
-        condition = f'messageSender contains "{escape_applescript(sender)}"'
-    else:
-        condition = 'true'
+    condition = f'messageSender contains "{escape_applescript(sender)}"' if sender else "true"
 
     script = f'''
     tell application "Mail"
@@ -249,12 +241,7 @@ def bulk_move_emails(
 
 @mcp.tool()
 @inject_preferences
-def save_email_attachment(
-    account: str,
-    subject_keyword: str,
-    attachment_name: str,
-    save_path: str
-) -> str:
+def save_email_attachment(account: str, subject_keyword: str, attachment_name: str, save_path: str) -> str:
     """
     Save a specific attachment from an email to disk.
 
@@ -340,10 +327,10 @@ def save_email_attachment(
 def update_email_status(
     account: str,
     action: str,
-    subject_keyword: Optional[str] = None,
-    sender: Optional[str] = None,
+    subject_keyword: str | None = None,
+    sender: str | None = None,
     mailbox: str = "INBOX",
-    max_updates: int = 10
+    max_updates: int = 10,
 ) -> str:
     """
     Update email status - mark as read/unread or flag/unflag emails.
@@ -362,7 +349,6 @@ def update_email_status(
 
     # Escape all user inputs for AppleScript
     safe_account = escape_applescript(account)
-    safe_mailbox = escape_applescript(mailbox)
 
     # Build search condition
     conditions = []
@@ -371,20 +357,20 @@ def update_email_status(
     if sender:
         conditions.append(f'messageSender contains "{escape_applescript(sender)}"')
 
-    condition_str = ' and '.join(conditions) if conditions else 'true'
+    condition_str = " and ".join(conditions) if conditions else "true"
 
     # Build action script
     if action == "mark_read":
-        action_script = 'set read status of aMessage to true'
+        action_script = "set read status of aMessage to true"
         action_label = "Marked as read"
     elif action == "mark_unread":
-        action_script = 'set read status of aMessage to false'
+        action_script = "set read status of aMessage to false"
         action_label = "Marked as unread"
     elif action == "flag":
-        action_script = 'set flagged status of aMessage to true'
+        action_script = "set flagged status of aMessage to true"
         action_label = "Flagged"
     elif action == "unflag":
-        action_script = 'set flagged status of aMessage to false'
+        action_script = "set flagged status of aMessage to false"
         action_label = "Unflagged"
     else:
         return f"Error: Invalid action '{action}'. Use: mark_read, mark_unread, flag, unflag"
@@ -396,16 +382,7 @@ def update_email_status(
 
         try
             set targetAccount to account "{safe_account}"
-            -- Try to get mailbox
-            try
-                set targetMailbox to mailbox "{safe_mailbox}" of targetAccount
-            on error
-                if "{safe_mailbox}" is "INBOX" then
-                    set targetMailbox to mailbox "Inbox" of targetAccount
-                else
-                    error "Mailbox not found: {safe_mailbox}"
-                end if
-            end try
+            {get_mailbox_script(mailbox, "targetMailbox")}
 
             set mailboxMessages to every message of targetMailbox
 
@@ -451,10 +428,10 @@ def update_email_status(
 def manage_trash(
     account: str,
     action: str,
-    subject_keyword: Optional[str] = None,
-    sender: Optional[str] = None,
+    subject_keyword: str | None = None,
+    sender: str | None = None,
     mailbox: str = "INBOX",
-    max_deletes: int = 5
+    max_deletes: int = 5,
 ) -> str:
     """
     Manage trash operations - delete emails or empty trash.
@@ -473,7 +450,6 @@ def manage_trash(
 
     # Escape all user inputs for AppleScript
     safe_account = escape_applescript(account)
-    safe_mailbox = escape_applescript(mailbox)
 
     if action == "empty_trash":
         script = f'''
@@ -486,9 +462,9 @@ def manage_trash(
                 set trashMessages to every message of trashMailbox
                 set messageCount to count of trashMessages
 
-                -- Delete all messages in trash
-                repeat with aMessage in trashMessages
-                    delete aMessage
+                -- Delete in reverse order to avoid index shifting
+                repeat with i from messageCount to 1 by -1
+                    delete item i of trashMessages
                 end repeat
 
                 set outputText to outputText & "✓ Emptied trash for account: {safe_account}" & return
@@ -509,7 +485,7 @@ def manage_trash(
         if sender:
             conditions.append(f'messageSender contains "{escape_applescript(sender)}"')
 
-        condition_str = ' and '.join(conditions) if conditions else 'true'
+        condition_str = " and ".join(conditions) if conditions else "true"
 
         script = f'''
         tell application "Mail"
@@ -520,11 +496,14 @@ def manage_trash(
                 set targetAccount to account "{safe_account}"
                 set trashMailbox to mailbox "Trash" of targetAccount
                 set trashMessages to every message of trashMailbox
+                set trashCount to count of trashMessages
 
-                repeat with aMessage in trashMessages
+                -- Iterate in reverse to avoid index shifting during deletion
+                repeat with i from trashCount to 1 by -1
                     if deleteCount >= {max_deletes} then exit repeat
 
                     try
+                        set aMessage to item i of trashMessages
                         set messageSubject to subject of aMessage
                         set messageSender to sender of aMessage
 
@@ -558,7 +537,7 @@ def manage_trash(
         if sender:
             conditions.append(f'messageSender contains "{escape_applescript(sender)}"')
 
-        condition_str = ' and '.join(conditions) if conditions else 'true'
+        condition_str = " and ".join(conditions) if conditions else "true"
 
         script = f'''
         tell application "Mail"
@@ -567,25 +546,19 @@ def manage_trash(
 
             try
                 set targetAccount to account "{safe_account}"
-                -- Get source mailbox
-                try
-                    set sourceMailbox to mailbox "{safe_mailbox}" of targetAccount
-                on error
-                    if "{safe_mailbox}" is "INBOX" then
-                        set sourceMailbox to mailbox "Inbox" of targetAccount
-                    else
-                        error "Mailbox not found: {safe_mailbox}"
-                    end if
-                end try
+                {get_mailbox_script(mailbox, "sourceMailbox")}
 
                 -- Get trash mailbox
                 set trashMailbox to mailbox "Trash" of targetAccount
                 set sourceMessages to every message of sourceMailbox
+                set srcCount to count of sourceMessages
 
-                repeat with aMessage in sourceMessages
+                -- Iterate in reverse to avoid index shifting during move
+                repeat with i from srcCount to 1 by -1
                     if deleteCount >= {max_deletes} then exit repeat
 
                     try
+                        set aMessage to item i of sourceMessages
                         set messageSubject to subject of aMessage
                         set messageSender to sender of aMessage
                         set messageDate to date received of aMessage

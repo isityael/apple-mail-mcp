@@ -1,18 +1,12 @@
 """Inbox tools: listing, counting, and overview."""
 
-from typing import Optional, List, Dict, Any
-
+from apple_mail_mcp.core import escape_applescript, inbox_mailbox_script, inject_preferences, run_applescript
 from apple_mail_mcp.server import mcp
-from apple_mail_mcp.core import inject_preferences, escape_applescript, run_applescript, inbox_mailbox_script
 
 
 @mcp.tool()
 @inject_preferences
-def list_inbox_emails(
-    account: Optional[str] = None,
-    max_emails: int = 0,
-    include_read: bool = True
-) -> str:
+def list_inbox_emails(account: str | None = None, max_emails: int = 0, include_read: bool = True) -> str:
     """
     List all emails from inbox across all accounts or a specific account.
 
@@ -25,7 +19,14 @@ def list_inbox_emails(
         Formatted list of emails with subject, sender, date, and read status
     """
 
-    script = f'''
+    account_filter_start = ""
+    account_filter_end = ""
+    if account:
+        safe_account = escape_applescript(account)
+        account_filter_start = f'if accountName is "{safe_account}" then'
+        account_filter_end = "end if"
+
+    script = f"""
     tell application "Mail"
         set outputText to "INBOX EMAILS - ALL ACCOUNTS" & return & return
         set totalCount to 0
@@ -33,6 +34,7 @@ def list_inbox_emails(
 
         repeat with anAccount in allAccounts
             set accountName to name of anAccount
+            {account_filter_start}
 
             try
                 {inbox_mailbox_script("inboxMailbox", "anAccount")}
@@ -81,6 +83,8 @@ def list_inbox_emails(
                 set outputText to outputText & "⚠ Error accessing inbox for account " & accountName & return
                 set outputText to outputText & "   " & errMsg & return & return
             end try
+
+            {account_filter_end}
         end repeat
 
         set outputText to outputText & "========================================" & return
@@ -89,7 +93,7 @@ def list_inbox_emails(
 
         return outputText
     end tell
-    '''
+    """
 
     result = run_applescript(script)
     return result
@@ -97,7 +101,7 @@ def list_inbox_emails(
 
 @mcp.tool()
 @inject_preferences
-def get_unread_count() -> Dict[str, int]:
+def get_unread_count() -> dict[str, int]:
     """
     Get the count of unread emails for each account.
 
@@ -105,9 +109,9 @@ def get_unread_count() -> Dict[str, int]:
         Dictionary mapping account names to unread email counts
     """
 
-    script = '''
+    script = f"""
     tell application "Mail"
-        set resultList to {}
+        set resultList to {{}}
         set allAccounts to every account
 
         repeat with anAccount in allAccounts
@@ -125,15 +129,15 @@ def get_unread_count() -> Dict[str, int]:
         set AppleScript's text item delimiters to "|"
         return resultList as string
     end tell
-    '''
+    """
 
     result = run_applescript(script)
 
     # Parse the result
     counts = {}
-    for item in result.split('|'):
-        if ':' in item:
-            account, count = item.split(':', 1)
+    for item in result.split("|"):
+        if ":" in item:
+            account, count = item.split(":", 1)
             if count != "ERROR":
                 counts[account] = int(count)
             else:
@@ -144,7 +148,7 @@ def get_unread_count() -> Dict[str, int]:
 
 @mcp.tool()
 @inject_preferences
-def list_accounts() -> List[str]:
+def list_accounts() -> list[str]:
     """
     List all available Mail accounts.
 
@@ -152,7 +156,7 @@ def list_accounts() -> List[str]:
         List of account names
     """
 
-    script = '''
+    script = """
     tell application "Mail"
         set accountNames to {}
         set allAccounts to every account
@@ -165,19 +169,15 @@ def list_accounts() -> List[str]:
         set AppleScript's text item delimiters to "|"
         return accountNames as string
     end tell
-    '''
+    """
 
     result = run_applescript(script)
-    return result.split('|') if result else []
+    return result.split("|") if result else []
 
 
 @mcp.tool()
 @inject_preferences
-def get_recent_emails(
-    account: str,
-    count: int = 10,
-    include_content: bool = False
-) -> str:
+def get_recent_emails(account: str, count: int = 10, include_content: bool = False) -> str:
     """
     Get the most recent emails from a specific account.
 
@@ -193,7 +193,8 @@ def get_recent_emails(
     # Escape user inputs for AppleScript
     escaped_account = escape_applescript(account)
 
-    content_script = '''
+    content_script = (
+        """
         try
             set msgContent to content of aMessage
             set AppleScript's text item delimiters to {{return, linefeed}}
@@ -212,7 +213,10 @@ def get_recent_emails(
         on error
             set outputText to outputText & "   Preview: [Not available]" & return
         end try
-    ''' if include_content else ''
+    """
+        if include_content
+        else ""
+    )
 
     script = f'''
     tell application "Mail"
@@ -268,10 +272,7 @@ def get_recent_emails(
 
 @mcp.tool()
 @inject_preferences
-def list_mailboxes(
-    account: Optional[str] = None,
-    include_counts: bool = True
-) -> str:
+def list_mailboxes(account: str | None = None, include_counts: bool = True) -> str:
     """
     List all mailboxes (folders) for a specific account or all accounts.
 
@@ -284,7 +285,8 @@ def list_mailboxes(
         For nested mailboxes, shows both indented format and path format (e.g., "Projects/Amplify Impact")
     """
 
-    count_script = '''
+    count_script = (
+        """
         try
             set msgCount to count of messages of aMailbox
             set unreadCount to unread count of aMailbox
@@ -292,18 +294,25 @@ def list_mailboxes(
         on error
             set outputText to outputText & " (count unavailable)"
         end try
-    ''' if include_counts else ''
+    """
+        if include_counts
+        else ""
+    )
 
     # Escape user inputs for AppleScript
     escaped_account = escape_applescript(account) if account else None
 
-    account_filter = f'''
+    account_filter = (
+        f'''
         if accountName is "{escaped_account}" then
-    ''' if account else ''
+    '''
+        if account
+        else ""
+    )
 
-    account_filter_end = 'end if' if account else ''
+    account_filter_end = "end if" if account else ""
 
-    script = f'''
+    script = f"""
     tell application "Mail"
         set outputText to "MAILBOXES" & return & return
         set allAccounts to every account
@@ -334,7 +343,7 @@ def list_mailboxes(
                                 set subName to name of subBox
                                 set outputText to outputText & "    └─ " & subName & " [Path: " & mailboxName & "/" & subName & "]"
 
-                                {count_script.replace('aMailbox', 'subBox') if include_counts else ''}
+                                {count_script.replace("aMailbox", "subBox") if include_counts else ""}
 
                                 set outputText to outputText & return
                             end repeat
@@ -350,7 +359,7 @@ def list_mailboxes(
 
         return outputText
     end tell
-    '''
+    """
 
     result = run_applescript(script)
     return result
@@ -372,7 +381,7 @@ def get_inbox_overview() -> str:
     to suggest relevant actions based on the current state.
     """
 
-    script = f'''
+    script = f"""
     tell application "Mail"
         set outputText to "╔══════════════════════════════════════════╗" & return
         set outputText to outputText & "║      EMAIL INBOX OVERVIEW                ║" & return
@@ -537,7 +546,7 @@ def get_inbox_overview() -> str:
 
         return outputText
     end tell
-    '''
+    """
 
     result = run_applescript(script)
     return result

@@ -4,8 +4,27 @@ version = "1.6.0"
 description = "MCP server for managing Apple Mail"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 dependencies = [
-    "fastmcp>=0.1.0",
-    "mcp-ui-server>=0.1.0",
+    "fastmcp>=3.1.0",
+    "mcp-ui-server>=1.0.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.4",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# AppleScript strings in tool modules are long by nature
+"apple_mail_mcp/tools/*.py" = ["E501"]
+# Connection cleanup and IMAP fallback patterns are clearer with try/except/pass
+"apple_mail_mcp/imap.py" = ["SIM105"]
+"apple_mail_mcp/tools/imap_sort.py" = ["SIM105"]

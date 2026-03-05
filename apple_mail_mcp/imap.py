@@ -4,10 +4,7 @@ import email
 import imaplib
 import os
 import ssl
-import socket
 from email.header import decode_header, make_header
-from typing import Optional
-
 
 # Default connection settings (overridable via env vars)
 DEFAULT_HOST = "127.0.0.1"
@@ -34,6 +31,7 @@ def get_imap_config() -> dict:
     # Try config file first
     if os.path.exists(CONFIG_FILE):
         import json
+
         with open(CONFIG_FILE) as f:
             file_config = json.load(f)
         config.update(file_config)
@@ -51,12 +49,15 @@ def get_imap_config() -> dict:
     return config
 
 
+_LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
 def connect(host: str, port: int, user: str, password: str) -> imaplib.IMAP4:
     """Connect and authenticate to an IMAP server.
 
     Tries SSL first (Proton Bridge v3 default), then STARTTLS, then plain.
+    Plain (unencrypted) fallback is only permitted for loopback addresses.
     """
-    socket.setdefaulttimeout(SOCKET_TIMEOUT)
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE  # Bridge uses a self-signed cert
@@ -65,6 +66,7 @@ def connect(host: str, port: int, user: str, password: str) -> imaplib.IMAP4:
     # 1. SSL
     try:
         imap = imaplib.IMAP4_SSL(host, port, ssl_context=ctx)
+        imap.socket().settimeout(SOCKET_TIMEOUT)
     except Exception:
         pass
 
@@ -72,13 +74,20 @@ def connect(host: str, port: int, user: str, password: str) -> imaplib.IMAP4:
     if imap is None:
         try:
             imap = imaplib.IMAP4(host, port)
+            imap.socket().settimeout(SOCKET_TIMEOUT)
             imap.starttls(ssl_context=ctx)
         except Exception:
             imap = None
 
-    # 3. Plain (localhost only)
+    # 3. Plain — loopback only
     if imap is None:
+        if host not in _LOOPBACK:
+            raise ConnectionError(
+                f"Cannot connect to {host}: SSL and STARTTLS both failed; "
+                "plain IMAP is only allowed for loopback addresses"
+            )
         imap = imaplib.IMAP4(host, port)
+        imap.socket().settimeout(SOCKET_TIMEOUT)
 
     imap.login(user, password)
     return imap
@@ -164,9 +173,7 @@ def batch_fetch_from_headers(imap: imaplib.IMAP4) -> list[tuple[bytes, str]]:
             if uid is None and i + 1 < len(fetch_data):
                 next_item = fetch_data[i + 1]
                 if isinstance(next_item, bytes):
-                    uid = _extract_uid(
-                        next_item.decode() if isinstance(next_item, bytes) else next_item
-                    )
+                    uid = _extract_uid(next_item.decode() if isinstance(next_item, bytes) else next_item)
 
             if uid is not None:
                 msg = email.message_from_bytes(raw_header)
@@ -181,13 +188,13 @@ def batch_fetch_from_headers(imap: imaplib.IMAP4) -> list[tuple[bytes, str]]:
     return results
 
 
-def _extract_uid(line: str) -> Optional[bytes]:
+def _extract_uid(line: str) -> bytes | None:
     """Extract UID from an IMAP FETCH response fragment like '1 (UID 123 ...' or ' UID 5)'."""
     upper = line.upper()
     idx = upper.find("UID ")
     if idx == -1:
         return None
-    rest = line[idx + 4:].strip()
+    rest = line[idx + 4 :].strip()
     uid_str = rest.split()[0].rstrip(")")
     if uid_str.isdigit():
         return uid_str.encode()

@@ -2,20 +2,40 @@
 
 # Newsletter detection patterns (sender-based)
 NEWSLETTER_PLATFORM_PATTERNS = [
-    "substack.com", "beehiiv.com", "mailchimp", "sendgrid",
-    "convertkit", "buttondown", "ghost.io", "revue.co", "mailgun",
+    "substack.com",
+    "beehiiv.com",
+    "mailchimp",
+    "sendgrid",
+    "convertkit",
+    "buttondown",
+    "ghost.io",
+    "revue.co",
+    "mailgun",
 ]
 
 NEWSLETTER_KEYWORD_PATTERNS = [
-    "newsletter", "digest", "weekly", "daily",
-    "bulletin", "briefing", "news@", "updates@",
+    "newsletter",
+    "digest",
+    "weekly",
+    "daily",
+    "bulletin",
+    "briefing",
+    "news@",
+    "updates@",
 ]
 
 # Folders to skip during broad searches
 SKIP_FOLDERS = [
-    "Trash", "Junk", "Junk Email", "Deleted Items",
-    "Sent", "Sent Items", "Sent Messages", "Drafts",
-    "Spam", "Deleted Messages",
+    "Trash",
+    "Junk",
+    "Junk Email",
+    "Deleted Items",
+    "Sent",
+    "Sent Items",
+    "Sent Messages",
+    "Drafts",
+    "Spam",
+    "Deleted Messages",
 ]
 
 # Thread subject prefixes to strip when matching threads

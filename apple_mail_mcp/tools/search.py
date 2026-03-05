@@ -1,19 +1,19 @@
 """Search tools: finding and filtering emails."""
 
-from typing import Optional, List, Dict, Any
-
+from apple_mail_mcp.core import (
+    LOWERCASE_HANDLER,
+    escape_applescript,
+    get_mailbox_script,
+    inject_preferences,
+    run_applescript,
+)
 from apple_mail_mcp.server import mcp
-from apple_mail_mcp.core import inject_preferences, escape_applescript, run_applescript, LOWERCASE_HANDLER
 
 
 @mcp.tool()
 @inject_preferences
 def get_email_with_content(
-    account: str,
-    subject_keyword: str,
-    max_results: int = 5,
-    max_content_length: int = 300,
-    mailbox: str = "INBOX"
+    account: str, subject_keyword: str, max_results: int = 5, max_content_length: int = 300, mailbox: str = "INBOX"
 ) -> str:
     """
     Search for emails by subject keyword and return with full content preview.
@@ -32,28 +32,19 @@ def get_email_with_content(
     # Escape user inputs for AppleScript
     escaped_keyword = escape_applescript(subject_keyword)
     escaped_account = escape_applescript(account)
-    escaped_mailbox = escape_applescript(mailbox)
 
     # Build mailbox selection logic
     if mailbox == "All":
-        mailbox_script = '''
+        mailbox_script = """
             set allMailboxes to every mailbox of targetAccount
             set searchMailboxes to allMailboxes
-        '''
+        """
         search_location = "all mailboxes"
     else:
-        mailbox_script = f'''
-            try
-                set searchMailbox to mailbox "{escaped_mailbox}" of targetAccount
-            on error
-                if "{escaped_mailbox}" is "INBOX" then
-                    set searchMailbox to mailbox "Inbox" of targetAccount
-                else
-                    error "Mailbox not found: {escaped_mailbox}"
-                end if
-            end try
+        mailbox_script = f"""
+            {get_mailbox_script(mailbox, "searchMailbox")}
             set searchMailboxes to {{searchMailbox}}
-        '''
+        """
         search_location = mailbox
 
     script = f'''
@@ -148,14 +139,14 @@ def get_email_with_content(
 def search_emails(
     account: str,
     mailbox: str = "INBOX",
-    subject_keyword: Optional[str] = None,
-    sender: Optional[str] = None,
-    has_attachments: Optional[bool] = None,
+    subject_keyword: str | None = None,
+    sender: str | None = None,
+    has_attachments: bool | None = None,
     read_status: str = "all",
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     include_content: bool = False,
-    max_results: int = 20
+    max_results: int = 20,
 ) -> str:
     """
     Unified search tool - search emails with advanced filtering across any mailbox.
@@ -193,20 +184,21 @@ def search_emails(
 
     if has_attachments is not None:
         if has_attachments:
-            conditions.append('(count of mail attachments of aMessage) > 0')
+            conditions.append("(count of mail attachments of aMessage) > 0")
         else:
-            conditions.append('(count of mail attachments of aMessage) = 0')
+            conditions.append("(count of mail attachments of aMessage) = 0")
 
     if read_status == "read":
-        conditions.append('messageRead is true')
+        conditions.append("messageRead is true")
     elif read_status == "unread":
-        conditions.append('messageRead is false')
+        conditions.append("messageRead is false")
 
     # Combine conditions with AND logic
-    condition_str = ' and '.join(conditions) if conditions else 'true'
+    condition_str = " and ".join(conditions) if conditions else "true"
 
     # Handle content preview
-    content_script = '''
+    content_script = (
+        """
         try
             set msgContent to content of aMessage
             set AppleScript's text item delimiters to {{return, linefeed}}
@@ -225,27 +217,22 @@ def search_emails(
         on error
             set outputText to outputText & "   Content: [Not available]" & return
         end try
-    ''' if include_content else ''
+    """
+        if include_content
+        else ""
+    )
 
     # Build mailbox selection logic
     if mailbox == "All":
-        mailbox_script = '''
+        mailbox_script = """
             set allMailboxes to every mailbox of targetAccount
             set searchMailboxes to allMailboxes
-        '''
+        """
     else:
-        mailbox_script = f'''
-            try
-                set searchMailbox to mailbox "{escaped_mailbox}" of targetAccount
-            on error
-                if "{escaped_mailbox}" is "INBOX" then
-                    set searchMailbox to mailbox "Inbox" of targetAccount
-                else
-                    error "Mailbox not found: {escaped_mailbox}"
-                end if
-            end try
+        mailbox_script = f"""
+            {get_mailbox_script(mailbox, "searchMailbox")}
             set searchMailboxes to {{searchMailbox}}
-        '''
+        """
 
     script = f'''
     tell application "Mail"
@@ -330,12 +317,12 @@ def search_emails(
 @inject_preferences
 def search_by_sender(
     sender: str,
-    account: Optional[str] = None,
+    account: str | None = None,
     days_back: int = 30,
     max_results: int = 20,
     include_content: bool = True,
     max_content_length: int = 500,
-    mailbox: str = "INBOX"
+    mailbox: str = "INBOX",
 ) -> str:
     """
     Find all emails from a specific sender across one or all accounts.
@@ -358,15 +345,15 @@ def search_by_sender(
     date_filter_script = ""
     date_check = ""
     if days_back > 0:
-        date_filter_script = f'''
+        date_filter_script = f"""
             set targetDate to (current date) - ({days_back} * days)
-        '''
+        """
         date_check = "and messageDate > targetDate"
 
     # Build content preview script
     content_script = ""
     if include_content:
-        content_script = f'''
+        content_script = f"""
                             try
                                 set msgContent to content of aMessage
                                 set AppleScript's text item delimiters to {{return, linefeed}}
@@ -385,45 +372,37 @@ def search_by_sender(
                             on error
                                 set outputText to outputText & "   Content: [Not available]" & return
                             end try
-        '''
+        """
 
     # Escape user inputs for AppleScript
     escaped_sender = escape_applescript(sender)
-    escaped_mailbox = escape_applescript(mailbox)
+
     search_all_mailboxes = mailbox == "All"
 
     # Build mailbox selection: INBOX-only (fast) vs all mailboxes
     if search_all_mailboxes:
-        mailbox_loop_start = '''
+        mailbox_loop_start = """
                 set accountMailboxes to every mailbox of anAccount
                 repeat with aMailbox in accountMailboxes
                     set mailboxName to name of aMailbox
                     -- Skip system and aggregate folders to avoid scanning huge mailboxes
                     if mailboxName is not in {"Trash", "Junk", "Junk Email", "Deleted Items", "Deleted Messages", "Spam", "Drafts", "Sent", "Sent Items", "Sent Messages", "Sent Mail", "All Mail", "Bin"} then
-        '''
-        mailbox_loop_end = f'''
+        """
+        mailbox_loop_end = f"""
                         if resultCount >= {max_results} then exit repeat
                     end if
                 end repeat
-        '''
+        """
     else:
-        mailbox_loop_start = f'''
+        mailbox_loop_start = f"""
                 -- Fast path: only search the target mailbox
-                try
-                    set aMailbox to mailbox "{escaped_mailbox}" of anAccount
-                on error
-                    if "{escaped_mailbox}" is "INBOX" then
-                        set aMailbox to mailbox "Inbox" of anAccount
-                    else
-                        error "Mailbox not found: {escaped_mailbox}"
-                    end if
-                end try
+                {get_mailbox_script(mailbox, "aMailbox", "anAccount")}
                 set mailboxName to name of aMailbox
                 if true then
-        '''
-        mailbox_loop_end = '''
+        """
+        mailbox_loop_end = """
                 end if
-        '''
+        """
 
     # Build account iteration: direct access (fast) vs all accounts
     if account:
@@ -433,19 +412,19 @@ def search_by_sender(
         set accountName to name of anAccount
         repeat 1 times
         '''
-        account_loop_end = '''
+        account_loop_end = """
         end repeat
-        '''
+        """
     else:
-        account_loop_start = f'''
+        account_loop_start = """
         set allAccounts to every account
         repeat with anAccount in allAccounts
             set accountName to name of anAccount
-        '''
-        account_loop_end = f'''
+        """
+        account_loop_end = f"""
             if resultCount >= {max_results} then exit repeat
         end repeat
-        '''
+        """
 
     script = f'''
     {LOWERCASE_HANDLER}
@@ -531,7 +510,7 @@ def search_email_content(
     search_subject: bool = True,
     search_body: bool = True,
     max_results: int = 10,
-    max_content_length: int = 600
+    max_content_length: int = 600,
 ) -> str:
     """
     Search email body content (and optionally subject).
@@ -557,7 +536,7 @@ def search_email_content(
         search_conditions.append(f'lowerSubject contains "{escaped_search}"')
     if search_body:
         search_conditions.append(f'lowerContent contains "{escaped_search}"')
-    search_condition = ' or '.join(search_conditions) if search_conditions else 'false'
+    search_condition = " or ".join(search_conditions) if search_conditions else "false"
 
     script = f'''
     {LOWERCASE_HANDLER}
@@ -569,15 +548,7 @@ def search_email_content(
         set resultCount to 0
         try
             set targetAccount to account "{escaped_account}"
-            try
-                set targetMailbox to mailbox "{escaped_mailbox}" of targetAccount
-            on error
-                if "{escaped_mailbox}" is "INBOX" then
-                    set targetMailbox to mailbox "Inbox" of targetAccount
-                else
-                    error "Mailbox not found: {escaped_mailbox}"
-                end if
-            end try
+            {get_mailbox_script(mailbox, "targetMailbox")}
             set mailboxMessages to every message of targetMailbox
             repeat with aMessage in mailboxMessages
                 if resultCount >= {max_results} then exit repeat
@@ -638,11 +609,11 @@ def search_email_content(
 @mcp.tool()
 @inject_preferences
 def get_newsletters(
-    account: Optional[str] = None,
+    account: str | None = None,
     days_back: int = 7,
     max_results: int = 25,
     include_content: bool = True,
-    max_content_length: int = 500
+    max_content_length: int = 500,
 ) -> str:
     """
     Find newsletter and digest emails by detecting common patterns.
@@ -663,7 +634,7 @@ def get_newsletters(
 
     content_script = ""
     if include_content:
-        content_script = f'''
+        content_script = f"""
                                     try
                                         set msgContent to content of aMessage
                                         set AppleScript's text item delimiters to {{return, linefeed}}
@@ -680,7 +651,7 @@ def get_newsletters(
                                     on error
                                         set outputText to outputText & "   Content: [Not available]" & return
                                     end try
-        '''
+        """
 
     account_filter_start = ""
     account_filter_end = ""
@@ -691,10 +662,10 @@ def get_newsletters(
     date_filter = ""
     date_check = ""
     if days_back > 0:
-        date_filter = f'set cutoffDate to (current date) - ({days_back} * days)'
+        date_filter = f"set cutoffDate to (current date) - ({days_back} * days)"
         date_check = " and messageDate > cutoffDate"
 
-    script = f'''
+    script = f"""
     {LOWERCASE_HANDLER}
 
     tell application "Mail"
@@ -757,7 +728,7 @@ def get_newsletters(
         set outputText to outputText & "========================================" & return
         return outputText
     end tell
-    '''
+    """
     result = run_applescript(script)
     return result
 
@@ -766,12 +737,12 @@ def get_newsletters(
 @inject_preferences
 def get_recent_from_sender(
     sender: str,
-    account: Optional[str] = None,
+    account: str | None = None,
     time_range: str = "week",
     max_results: int = 15,
     include_content: bool = True,
     max_content_length: int = 400,
-    mailbox: str = "INBOX"
+    mailbox: str = "INBOX",
 ) -> str:
     """
     Get recent emails from a specific sender with simple, human-friendly time filters.
@@ -799,7 +770,7 @@ def get_recent_from_sender(
 
     content_script = ""
     if include_content:
-        content_script = f'''
+        content_script = f"""
                                     try
                                         set msgContent to content of aMessage
                                         set AppleScript's text item delimiters to {{return, linefeed}}
@@ -816,59 +787,51 @@ def get_recent_from_sender(
                                     on error
                                         set outputText to outputText & "   Content: [Not available]" & return
                                     end try
-        '''
+        """
 
     # Escape user inputs for AppleScript
     escaped_sender = escape_applescript(sender)
-    escaped_mailbox = escape_applescript(mailbox)
+
     search_all_mailboxes = mailbox == "All"
 
     date_filter = ""
     date_check = ""
     if days_back > 0:
-        date_filter = f'set cutoffDate to (current date) - ({days_back} * days)'
+        date_filter = f"set cutoffDate to (current date) - ({days_back} * days)"
         if is_yesterday:
-            date_filter += '''
+            date_filter += """
             set todayStart to (current date) - (time of (current date))
             set yesterdayStart to todayStart - (1 * days)
-            '''
+            """
             date_check = " and messageDate >= yesterdayStart and messageDate < todayStart"
         else:
             date_check = " and messageDate > cutoffDate"
 
     # Build mailbox selection: INBOX-only (fast) vs all mailboxes
     if search_all_mailboxes:
-        mailbox_loop_start = '''
+        mailbox_loop_start = """
                 set accountMailboxes to every mailbox of anAccount
                 repeat with aMailbox in accountMailboxes
                     try
                         set mailboxName to name of aMailbox
                         if mailboxName is not in {"Trash", "Junk", "Junk Email", "Deleted Items", "Deleted Messages", "Spam", "Drafts", "Sent", "Sent Items", "Sent Messages", "Sent Mail", "All Mail", "Bin"} then
-        '''
-        mailbox_loop_end = f'''
+        """
+        mailbox_loop_end = f"""
                         end if
                     end try
                     if resultCount >= {max_results} then exit repeat
                 end repeat
-        '''
+        """
     else:
-        mailbox_loop_start = f'''
+        mailbox_loop_start = f"""
                 -- Fast path: only search the target mailbox
-                try
-                    set aMailbox to mailbox "{escaped_mailbox}" of anAccount
-                on error
-                    if "{escaped_mailbox}" is "INBOX" then
-                        set aMailbox to mailbox "Inbox" of anAccount
-                    else
-                        error "Mailbox not found: {escaped_mailbox}"
-                    end if
-                end try
+                {get_mailbox_script(mailbox, "aMailbox", "anAccount")}
                 set mailboxName to name of aMailbox
                 if true then
-        '''
-        mailbox_loop_end = '''
+        """
+        mailbox_loop_end = """
                 end if
-        '''
+        """
 
     # Build account iteration: direct access (fast) vs all accounts
     if account:
@@ -878,19 +841,19 @@ def get_recent_from_sender(
         set accountName to name of anAccount
         repeat 1 times
         '''
-        account_loop_end = '''
+        account_loop_end = """
         end repeat
-        '''
+        """
     else:
-        account_loop_start = f'''
+        account_loop_start = """
         set allAccounts to every account
         repeat with anAccount in allAccounts
             set accountName to name of anAccount
-        '''
-        account_loop_end = f'''
+        """
+        account_loop_end = f"""
             if resultCount >= {max_results} then exit repeat
         end repeat
-        '''
+        """
 
     script = f'''
     {LOWERCASE_HANDLER}
@@ -952,12 +915,7 @@ def get_recent_from_sender(
 
 @mcp.tool()
 @inject_preferences
-def get_email_thread(
-    account: str,
-    subject_keyword: str,
-    mailbox: str = "INBOX",
-    max_messages: int = 50
-) -> str:
+def get_email_thread(account: str, subject_keyword: str, mailbox: str = "INBOX", max_messages: int = 50) -> str:
     """
     Get an email conversation thread - all messages with the same or similar subject.
 
@@ -973,34 +931,25 @@ def get_email_thread(
 
     # Escape user inputs for AppleScript
     escaped_account = escape_applescript(account)
-    escaped_mailbox = escape_applescript(mailbox)
 
     # For thread detection, we'll strip common prefixes
-    thread_keywords = ['Re:', 'Fwd:', 'FW:', 'RE:', 'Fw:']
+    thread_keywords = ["Re:", "Fwd:", "FW:", "RE:", "Fw:"]
     cleaned_keyword = subject_keyword
     for prefix in thread_keywords:
-        cleaned_keyword = cleaned_keyword.replace(prefix, '').strip()
+        cleaned_keyword = cleaned_keyword.replace(prefix, "").strip()
     escaped_keyword = escape_applescript(cleaned_keyword)
 
-    mailbox_script = f'''
-        try
-            set searchMailbox to mailbox "{escaped_mailbox}" of targetAccount
-        on error
-            if "{escaped_mailbox}" is "INBOX" then
-                set searchMailbox to mailbox "Inbox" of targetAccount
-            else if "{escaped_mailbox}" is "All" then
-                set searchMailboxes to every mailbox of targetAccount
-                set useAllMailboxes to true
-            else
-                error "Mailbox not found: {escaped_mailbox}"
-            end if
-        end try
-
-        if "{escaped_mailbox}" is not "All" then
-            set searchMailboxes to {{searchMailbox}}
-            set useAllMailboxes to false
-        end if
-    '''
+    if mailbox == "All":
+        mailbox_setup = """
+        set searchMailboxes to every mailbox of targetAccount
+        set useAllMailboxes to true
+    """
+    else:
+        mailbox_setup = f"""
+        {get_mailbox_script(mailbox, "searchMailbox")}
+        set searchMailboxes to {{searchMailbox}}
+        set useAllMailboxes to false
+    """
 
     script = f'''
     tell application "Mail"
@@ -1011,7 +960,7 @@ def get_email_thread(
 
         try
             set targetAccount to account "{escaped_account}"
-            {mailbox_script}
+            {mailbox_setup}
 
             -- Collect all matching messages from all mailboxes
             repeat with currentMailbox in searchMailboxes
@@ -1100,12 +1049,12 @@ def get_email_thread(
 @mcp.tool()
 @inject_preferences
 def search_all_accounts(
-    subject_keyword: Optional[str] = None,
-    sender: Optional[str] = None,
+    subject_keyword: str | None = None,
+    sender: str | None = None,
     days_back: int = 7,
     max_results: int = 30,
     include_content: bool = True,
-    max_content_length: int = 400
+    max_content_length: int = 400,
 ) -> str:
     """
     Search across ALL email accounts at once.
@@ -1127,12 +1076,12 @@ def search_all_accounts(
     # Build date filter
     date_filter = ""
     if days_back > 0:
-        date_filter = f'''
+        date_filter = f"""
             set cutoffDate to (current date) - ({days_back} * days)
             if messageDate < cutoffDate then
                 set skipMessage to true
             end if
-        '''
+        """
 
     # Build subject filter
     subject_filter = ""
@@ -1161,7 +1110,7 @@ def search_all_accounts(
     # Build content retrieval
     content_retrieval = ""
     if include_content:
-        content_retrieval = f'''
+        content_retrieval = f"""
             try
                 set messageContent to content of msg
                 if length of messageContent > {max_content_length} then
@@ -1174,9 +1123,9 @@ def search_all_accounts(
                 set messageContent to "(Content unavailable)"
             end try
             set emailRecord to emailRecord & "Content: " & messageContent & linefeed
-        '''
+        """
 
-    script = f'''
+    script = f"""
         {LOWERCASE_HANDLER}
 
         on replaceText(theText, searchStr, replaceStr)
@@ -1308,7 +1257,7 @@ def search_all_accounts(
             end repeat
             return theList
         end sortByDate
-    '''
+    """
 
     result = run_applescript(script)
     return result

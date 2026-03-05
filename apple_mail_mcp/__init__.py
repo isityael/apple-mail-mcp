@@ -1,18 +1,21 @@
 """Apple Mail MCP - Modular package."""
 
-from apple_mail_mcp.server import mcp
+from apple_mail_mcp.server import mcp as mcp
 
 # UI availability flag
 try:
-    from ui import create_inbox_dashboard_ui
+    from ui import create_inbox_dashboard_ui  # noqa: F401
+
     UI_AVAILABLE = True
 except ImportError:
     UI_AVAILABLE = False
 
 # Import all tool modules to register @mcp.tool() decorators
-from apple_mail_mcp.tools import inbox      # noqa: F401  (6 tools)
-from apple_mail_mcp.tools import search     # noqa: F401  (8 tools)
-from apple_mail_mcp.tools import compose    # noqa: F401  (4 tools)
-from apple_mail_mcp.tools import manage     # noqa: F401  (5 tools)
-from apple_mail_mcp.tools import imap_sort  # noqa: F401  (2 tools)
-from apple_mail_mcp.tools import analytics  # noqa: F401  (4 tools)
+from apple_mail_mcp.tools import (
+    analytics,  # noqa: F401  (4 tools)
+    compose,  # noqa: F401  (4 tools)
+    imap_sort,  # noqa: F401  (2 tools)
+    inbox,  # noqa: F401  (6 tools)
+    manage,  # noqa: F401  (5 tools)
+    search,  # noqa: F401  (8 tools)
+)
