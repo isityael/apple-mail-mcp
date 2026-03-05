@@ -13,4 +13,10 @@ steps:
     image: ghcr.io/astral-sh/uv:python3.13-bookworm
     commands:
       - uv sync --frozen
-      - uv run python -c "from apple_mail_mcp import mcp; n = len(mcp._tool_manager._tools); assert n == 29, f'Expected 29 tools, got {n}'; print(f'OK: {n} tools registered')"
+      - |
+        uv run python << 'PYEOF'
+        from apple_mail_mcp import mcp
+        n = len(mcp._tool_manager._tools)
+        assert n == 29, "Expected 29 tools, got %d" % n
+        print("OK: %d tools registered" % n)
+        PYEOF

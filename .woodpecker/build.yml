@@ -16,4 +16,11 @@ steps:
   - name: verify-manifest
     image: python:3.13-slim
     commands:
-      - python3 -c "import json; m=json.load(open('apple-mail-mcpb/manifest.json')); n=len(m['tools']); assert n == 29, f'Expected 29 tools, got {n}'; print(f'OK: {n} tools in manifest')"
+      - |
+        python3 << 'PYEOF'
+        import json
+        m = json.load(open("apple-mail-mcpb/manifest.json"))
+        n = len(m["tools"])
+        assert n == 29, "Expected 29 tools, got %d" % n
+        print("OK: %d tools in manifest" % n)
+        PYEOF
