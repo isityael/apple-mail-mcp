@@ -8,13 +8,13 @@ when:
 
 steps:
   - name: build-mcpb
-    image: debian:bookworm-slim
+    image: debian:bookworm-slim@sha256:74d56e3931e0d5a1dd51f8c8a2466d21de84a271cd3b5a733b803aa91abf4421
     commands:
       - apt-get update -qq && apt-get install -y -qq zip python3 > /dev/null
       - bash apple-mail-mcpb/build-mcpb.sh
 
   - name: verify-manifest
-    image: python:3.13-slim
+    image: python:3.13-slim@sha256:8bc60ca09afaa8ea0d6d1220bde073bacfedd66a4bf8129cbdc8ef0e16c8a952
     commands:
       - |
         python3 << 'PYEOF'

@@ -4,12 +4,12 @@ when:
 
 steps:
   - name: ruff-check
-    image: ghcr.io/astral-sh/uv:python3.13-bookworm
+    image: ghcr.io/astral-sh/uv:python3.13-bookworm@sha256:47965cdc9d53a515f68f78241161c901e70051ce428f12e791bd7fe19f6a631a
     commands:
       - uv sync --frozen
       - uv run ruff check .
 
   - name: ruff-format
-    image: ghcr.io/astral-sh/uv:python3.13-bookworm
+    image: ghcr.io/astral-sh/uv:python3.13-bookworm@sha256:47965cdc9d53a515f68f78241161c901e70051ce428f12e791bd7fe19f6a631a
     commands:
       - uv run ruff format --check .

@@ -3,13 +3,13 @@ when:
 
 steps:
   - name: build-mcpb
-    image: debian:bookworm-slim
+    image: debian:bookworm-slim@sha256:74d56e3931e0d5a1dd51f8c8a2466d21de84a271cd3b5a733b803aa91abf4421
     commands:
       - apt-get update -qq && apt-get install -y -qq zip python3 > /dev/null
       - bash apple-mail-mcpb/build-mcpb.sh
 
   - name: release
-    image: woodpeckerci/plugin-release
+    image: woodpeckerci/plugin-release@sha256:26196798028d9120d62a08807c3edc645ef97da23a4a9057f423690d32c8c9ad
     settings:
       api_key:
         from_secret: forgejo_token
