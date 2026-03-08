@@ -14,7 +14,7 @@ steps:
       - bash apple-mail-mcpb/build-mcpb.sh
 
   - name: verify-manifest
-    image: python:3.13-slim
+    image: python:3.14-slim@sha256:6a27522252aef8432841f224d9baaa6e9fce07b07584154fa0b9a96603af7456
     commands:
       - |
         python3 << 'PYEOF'
