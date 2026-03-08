@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":preserveSemverRanges"
+  ],
+  "platformAutomerge": false,
+  "dependencyDashboard": true,
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "at any time"
+  ],
+  "prHourlyLimit": 5,
+  "prConcurrentLimit": 3,
+  "labels": [
+    "dependencies"
+  ],
+  "pinDigests": false
+}
