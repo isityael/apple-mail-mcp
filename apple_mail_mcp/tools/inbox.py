@@ -1,12 +1,42 @@
 """Inbox tools: listing, counting, and overview."""
 
+import json
+from typing import Any
+
 from apple_mail_mcp.core import escape_applescript, inbox_mailbox_script, inject_preferences, run_applescript
 from apple_mail_mcp.server import mcp
 
 
+def _parse_pipe_delimited_emails(raw: str) -> list[dict[str, Any]]:
+    """Parse '|||'-delimited AppleScript output into a list of email dicts."""
+    emails = []
+    if not raw:
+        return emails
+    for line in raw.split("\n"):
+        if "|||" not in line:
+            continue
+        parts = line.split("|||")
+        if len(parts) >= 5:
+            emails.append(
+                {
+                    "subject": parts[0].strip(),
+                    "sender": parts[1].strip(),
+                    "date": parts[2].strip(),
+                    "is_read": parts[3].strip().lower() == "true",
+                    "account": parts[4].strip(),
+                }
+            )
+    return emails
+
+
 @mcp.tool()
 @inject_preferences
-def list_inbox_emails(account: str | None = None, max_emails: int = 0, include_read: bool = True) -> str:
+def list_inbox_emails(
+    account: str | None = None,
+    max_emails: int = 0,
+    include_read: bool = True,
+    output_format: str = "text",
+) -> str:
     """
     List all emails from inbox across all accounts or a specific account.
 
@@ -14,17 +44,14 @@ def list_inbox_emails(account: str | None = None, max_emails: int = 0, include_r
         account: Optional account name to filter (e.g., "Gmail", "Work"). If None, shows all accounts.
         max_emails: Maximum number of emails to return per account (0 = all)
         include_read: Whether to include read emails (default: True)
+        output_format: "text" (default, human-readable) or "json" (structured list of email dicts)
 
     Returns:
         Formatted list of emails with subject, sender, date, and read status
     """
 
-    account_filter_start = ""
-    account_filter_end = ""
-    if account:
-        safe_account = escape_applescript(account)
-        account_filter_start = f'if accountName is "{safe_account}" then'
-        account_filter_end = "end if"
+    if output_format == "json":
+        return _list_inbox_emails_json(account, max_emails, include_read)
 
     script = f"""
     tell application "Mail"
@@ -34,7 +61,6 @@ def list_inbox_emails(account: str | None = None, max_emails: int = 0, include_r
 
         repeat with anAccount in allAccounts
             set accountName to name of anAccount
-            {account_filter_start}
 
             try
                 {inbox_mailbox_script("inboxMailbox", "anAccount")}
@@ -83,8 +109,6 @@ def list_inbox_emails(account: str | None = None, max_emails: int = 0, include_r
                 set outputText to outputText & "⚠ Error accessing inbox for account " & accountName & return
                 set outputText to outputText & "   " & errMsg & return & return
             end try
-
-            {account_filter_end}
         end repeat
 
         set outputText to outputText & "========================================" & return
@@ -99,6 +123,56 @@ def list_inbox_emails(account: str | None = None, max_emails: int = 0, include_r
     return result
 
 
+def _list_inbox_emails_json(
+    account: str | None,
+    max_emails: int,
+    include_read: bool,
+) -> str:
+    """Return inbox emails as a JSON string."""
+    escaped_account = escape_applescript(account) if account else None
+    account_filter = f'if accountName is "{escaped_account}" then' if account else ""
+    account_filter_end = "end if" if account else ""
+
+    script = f"""
+    tell application "Mail"
+        set resultLines to {{}}
+        set allAccounts to every account
+        repeat with anAccount in allAccounts
+            set accountName to name of anAccount
+            {account_filter}
+            try
+                {inbox_mailbox_script("inboxMailbox", "anAccount")}
+                set inboxMessages to every message of inboxMailbox
+                set currentIndex to 0
+                repeat with aMessage in inboxMessages
+                    set currentIndex to currentIndex + 1
+                    if {max_emails} > 0 and currentIndex > {max_emails} then exit repeat
+                    try
+                        set messageSubject to subject of aMessage
+                        set messageSender to sender of aMessage
+                        set messageDate to date received of aMessage
+                        set messageRead to read status of aMessage
+                        set shouldInclude to true
+                        if not {str(include_read).lower()} and messageRead then
+                            set shouldInclude to false
+                        end if
+                        if shouldInclude then
+                            set end of resultLines to messageSubject & "|||" & messageSender & "|||" & (messageDate as string) & "|||" & messageRead & "|||" & accountName
+                        end if
+                    end try
+                end repeat
+            end try
+            {account_filter_end}
+        end repeat
+        set AppleScript's text item delimiters to linefeed
+        return resultLines as string
+    end tell
+    """
+    raw = run_applescript(script)
+    emails = _parse_pipe_delimited_emails(raw)
+    return json.dumps(emails, indent=2)
+
+
 @mcp.tool()
 @inject_preferences
 def get_unread_count() -> dict[str, int]:
@@ -109,9 +183,9 @@ def get_unread_count() -> dict[str, int]:
         Dictionary mapping account names to unread email counts
     """
 
-    script = f"""
+    script = """
     tell application "Mail"
-        set resultList to {{}}
+        set resultList to {}
         set allAccounts to every account
 
         repeat with anAccount in allAccounts
@@ -177,7 +251,12 @@ def list_accounts() -> list[str]:
 
 @mcp.tool()
 @inject_preferences
-def get_recent_emails(account: str, count: int = 10, include_content: bool = False) -> str:
+def get_recent_emails(
+    account: str,
+    count: int = 10,
+    include_content: bool = False,
+    output_format: str = "text",
+) -> str:
     """
     Get the most recent emails from a specific account.
 
@@ -185,10 +264,14 @@ def get_recent_emails(account: str, count: int = 10, include_content: bool = Fal
         account: Account name (e.g., "Gmail", "Work")
         count: Number of recent emails to retrieve (default: 10)
         include_content: Whether to include content preview (slower, default: False)
+        output_format: "text" (default, human-readable) or "json" (structured list of email dicts)
 
     Returns:
         Formatted list of recent emails
     """
+
+    if output_format == "json":
+        return _get_recent_emails_json(account, count)
 
     # Escape user inputs for AppleScript
     escaped_account = escape_applescript(account)
@@ -268,6 +351,40 @@ def get_recent_emails(account: str, count: int = 10, include_content: bool = Fal
 
     result = run_applescript(script)
     return result
+
+
+def _get_recent_emails_json(account: str, count: int) -> str:
+    """Return recent emails as a JSON string."""
+    escaped_account = escape_applescript(account)
+    script = f'''
+    tell application "Mail"
+        set resultLines to {{}}
+        try
+            set targetAccount to account "{escaped_account}"
+            {inbox_mailbox_script("inboxMailbox", "targetAccount")}
+            set inboxMessages to every message of inboxMailbox
+            set currentIndex to 0
+            repeat with aMessage in inboxMessages
+                set currentIndex to currentIndex + 1
+                if currentIndex > {count} then exit repeat
+                try
+                    set messageSubject to subject of aMessage
+                    set messageSender to sender of aMessage
+                    set messageDate to date received of aMessage
+                    set messageRead to read status of aMessage
+                    set end of resultLines to messageSubject & "|||" & messageSender & "|||" & (messageDate as string) & "|||" & messageRead & "|||" & "{escaped_account}"
+                end try
+            end repeat
+        on error errMsg
+            return "Error: " & errMsg
+        end try
+        set AppleScript's text item delimiters to linefeed
+        return resultLines as string
+    end tell
+    '''
+    raw = run_applescript(script)
+    emails = _parse_pipe_delimited_emails(raw)
+    return json.dumps(emails, indent=2)
 
 
 @mcp.tool()

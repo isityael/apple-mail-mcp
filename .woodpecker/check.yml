@@ -16,6 +16,6 @@ steps:
         uv run python << 'PYEOF'
         from apple_mail_mcp import mcp
         n = len(mcp._tool_manager._tools)
-        assert n == 29, "Expected 29 tools, got %d" % n
+        assert n == 37, "Expected 37 tools, got %d" % n
         print("OK: %d tools registered" % n)
         PYEOF

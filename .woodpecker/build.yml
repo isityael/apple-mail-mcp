@@ -21,6 +21,6 @@ steps:
         import json
         m = json.load(open("apple-mail-mcpb/manifest.json"))
         n = len(m["tools"])
-        assert n == 29, "Expected 29 tools, got %d" % n
+        assert n == 37, "Expected 37 tools, got %d" % n
         print("OK: %d tools in manifest" % n)
         PYEOF

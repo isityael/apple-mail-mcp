@@ -3,13 +3,8 @@
 import os
 from typing import Any
 
-from apple_mail_mcp.core import (
-    escape_applescript,
-    get_mailbox_script,
-    inbox_mailbox_script,
-    inject_preferences,
-    run_applescript,
-)
+from apple_mail_mcp.constants import SKIP_FOLDERS
+from apple_mail_mcp.core import escape_applescript, inbox_mailbox_script, inject_preferences, run_applescript
 from apple_mail_mcp.server import mcp
 
 
@@ -134,10 +129,9 @@ def get_statistics(
         date_filter = f"""
             set targetDate to (current date) - ({days_back} * days)
         """
-        date_check = "and messageDate > targetDate"
-    else:
-        date_filter = ""
-        date_check = ""
+
+    # Build skip folders condition from constants
+    skip_folder_checks = " and ".join(f'mailboxName is not "{f}"' for f in SKIP_FOLDERS)
 
     if scope == "account_overview":
         script = f'''
@@ -163,60 +157,70 @@ def get_statistics(
 
                 -- Analyze all mailboxes
                 repeat with aMailbox in allMailboxes
-                    set mailboxName to name of aMailbox
-                    set mailboxMessages to every message of aMailbox
-                    set mailboxTotal to 0
+                    try
+                        set mailboxName to name of aMailbox
 
-                    repeat with aMessage in mailboxMessages
-                        try
-                            set messageDate to date received of aMessage
+                        -- Skip system folders
+                        if {skip_folder_checks} then
 
-                            -- Apply date filter if specified
-                            if true {date_check} then
-                                set totalEmails to totalEmails + 1
-                                set mailboxTotal to mailboxTotal + 1
+                            -- Use whose clause for date pre-filtering when days_back > 0
+                            if {days_back} > 0 then
+                                set mailboxMessages to (every message of aMailbox whose date received > targetDate)
+                            else
+                                set mailboxMessages to every message of aMailbox
+                            end if
+                            set mailboxTotal to 0
 
-                                -- Count read/unread
-                                if read status of aMessage then
-                                    set totalRead to totalRead + 1
-                                else
-                                    set totalUnread to totalUnread + 1
-                                end if
-
-                                -- Count flagged
+                            repeat with aMessage in mailboxMessages
                                 try
-                                    if flagged status of aMessage then
-                                        set totalFlagged to totalFlagged + 1
+                                    set totalEmails to totalEmails + 1
+                                    set mailboxTotal to mailboxTotal + 1
+
+                                    -- Count read/unread
+                                    if read status of aMessage then
+                                        set totalRead to totalRead + 1
+                                    else
+                                        set totalUnread to totalUnread + 1
+                                    end if
+
+                                    -- Count flagged
+                                    try
+                                        if flagged status of aMessage then
+                                            set totalFlagged to totalFlagged + 1
+                                        end if
+                                    end try
+
+                                    -- Count attachments
+                                    set attachmentCount to count of mail attachments of aMessage
+                                    if attachmentCount > 0 then
+                                        set totalWithAttachments to totalWithAttachments + 1
+                                    end if
+
+                                    -- Track senders (top 10)
+                                    set messageSender to sender of aMessage
+                                    set senderFound to false
+                                    repeat with senderPair in senderCounts
+                                        if item 1 of senderPair is messageSender then
+                                            set item 2 of senderPair to (item 2 of senderPair) + 1
+                                            set senderFound to true
+                                            exit repeat
+                                        end if
+                                    end repeat
+                                    if not senderFound then
+                                        set end of senderCounts to {{messageSender, 1}}
                                     end if
                                 end try
+                            end repeat
 
-                                -- Count attachments
-                                set attachmentCount to count of mail attachments of aMessage
-                                if attachmentCount > 0 then
-                                    set totalWithAttachments to totalWithAttachments + 1
-                                end if
-
-                                -- Track senders (top 10)
-                                set messageSender to sender of aMessage
-                                set senderFound to false
-                                repeat with senderPair in senderCounts
-                                    if item 1 of senderPair is messageSender then
-                                        set item 2 of senderPair to (item 2 of senderPair) + 1
-                                        set senderFound to true
-                                        exit repeat
-                                    end if
-                                end repeat
-                                if not senderFound then
-                                    set end of senderCounts to {{messageSender, 1}}
-                                end if
+                            -- Store mailbox counts
+                            if mailboxTotal > 0 then
+                                set end of mailboxCounts to {{mailboxName, mailboxTotal}}
                             end if
-                        end try
-                    end repeat
 
-                    -- Store mailbox counts
-                    if mailboxTotal > 0 then
-                        set end of mailboxCounts to {{mailboxName, mailboxTotal}}
-                    end if
+                        end if
+                    on error
+                        -- Skip mailboxes that throw errors (smart mailboxes, etc.)
+                    end try
                 end repeat
 
                 -- Format output
@@ -274,6 +278,12 @@ def get_statistics(
         if not sender:
             return "Error: 'sender' parameter required for sender_stats scope"
 
+        # Build whose clause for fast app-level filtering
+        whose_parts = [f'sender contains "{escaped_sender}"']
+        if days_back > 0:
+            whose_parts.append("date received > targetDate")
+        whose_clause = " and ".join(whose_parts)
+
         script = f'''
         tell application "Mail"
             set outputText to "SENDER STATISTICS" & return & return
@@ -291,26 +301,33 @@ def get_statistics(
                 set withAttachments to 0
 
                 repeat with aMailbox in allMailboxes
-                    set mailboxMessages to every message of aMailbox
+                    try
+                        set mailboxName to name of aMailbox
 
-                    repeat with aMessage in mailboxMessages
-                        try
-                            set messageSender to sender of aMessage
-                            set messageDate to date received of aMessage
+                        -- Skip system folders
+                        if {skip_folder_checks} then
 
-                            if messageSender contains "{escaped_sender}" {date_check} then
-                                set totalFromSender to totalFromSender + 1
+                            -- Use whose clause for fast app-level filtering
+                            set matchedMessages to (every message of aMailbox whose {whose_clause})
 
-                                if not (read status of aMessage) then
-                                    set unreadFromSender to unreadFromSender + 1
-                                end if
+                            repeat with aMessage in matchedMessages
+                                try
+                                    set totalFromSender to totalFromSender + 1
 
-                                if (count of mail attachments of aMessage) > 0 then
-                                    set withAttachments to withAttachments + 1
-                                end if
-                            end if
-                        end try
-                    end repeat
+                                    if not (read status of aMessage) then
+                                        set unreadFromSender to unreadFromSender + 1
+                                    end if
+
+                                    if (count of mail attachments of aMessage) > 0 then
+                                        set withAttachments to withAttachments + 1
+                                    end if
+                                end try
+                            end repeat
+
+                        end if
+                    on error
+                        -- Skip mailboxes that throw errors (smart mailboxes, etc.)
+                    end try
                 end repeat
 
                 set outputText to outputText & "Total emails: " & totalFromSender & return
@@ -336,7 +353,15 @@ def get_statistics(
 
             try
                 set targetAccount to account "{escaped_account}"
-                {get_mailbox_script(mailbox or "INBOX", "targetMailbox")}
+                try
+                    set targetMailbox to mailbox "{mailbox_param}" of targetAccount
+                on error
+                    if "{mailbox_param}" is "INBOX" then
+                        set targetMailbox to mailbox "Inbox" of targetAccount
+                    else
+                        error "Mailbox not found"
+                    end if
+                end try
 
                 set mailboxMessages to every message of targetMailbox
                 set totalMessages to count of mailboxMessages
@@ -370,6 +395,7 @@ def export_emails(
     mailbox: str = "INBOX",
     save_directory: str = "~/Desktop",
     format: str = "txt",
+    max_emails: int = 1000,
 ) -> str:
     """
     Export emails to files for backup or analysis.
@@ -381,6 +407,7 @@ def export_emails(
         mailbox: Mailbox to export from (default: "INBOX")
         save_directory: Directory to save exports (default: "~/Desktop")
         format: Export format: "txt", "html" (default: "txt")
+        max_emails: Maximum number of emails to export for entire_mailbox (default: 1000, safety cap)
 
     Returns:
         Confirmation message with export location
@@ -390,14 +417,10 @@ def export_emails(
     save_dir = os.path.expanduser(save_directory)
 
     # Escape all user inputs for AppleScript
-    import re
-
     safe_account = escape_applescript(account)
     safe_mailbox = escape_applescript(mailbox)
     safe_format = escape_applescript(format)
     safe_save_dir = escape_applescript(save_dir)
-    # Sanitize mailbox name for filesystem use — strip path separators and control chars
-    safe_mailbox_dirname = re.sub(r"[^\w\-. ]", "_", mailbox)[:64]
 
     if scope == "single_email":
         if not subject_keyword:
@@ -411,7 +434,16 @@ def export_emails(
 
             try
                 set targetAccount to account "{safe_account}"
-                {get_mailbox_script(mailbox, "targetMailbox")}
+                -- Try to get mailbox
+                try
+                    set targetMailbox to mailbox "{safe_mailbox}" of targetAccount
+                on error
+                    if "{safe_mailbox}" is "INBOX" then
+                        set targetMailbox to mailbox "Inbox" of targetAccount
+                    else
+                        error "Mailbox not found: {safe_mailbox}"
+                    end if
+                end try
 
                 set mailboxMessages to every message of targetMailbox
                 set foundMessage to missing value
@@ -492,17 +524,28 @@ def export_emails(
 
             try
                 set targetAccount to account "{safe_account}"
-                {get_mailbox_script(mailbox, "targetMailbox")}
+                -- Try to get mailbox
+                try
+                    set targetMailbox to mailbox "{safe_mailbox}" of targetAccount
+                on error
+                    if "{safe_mailbox}" is "INBOX" then
+                        set targetMailbox to mailbox "Inbox" of targetAccount
+                    else
+                        error "Mailbox not found: {safe_mailbox}"
+                    end if
+                end try
 
                 set mailboxMessages to every message of targetMailbox
                 set messageCount to count of mailboxMessages
                 set exportCount to 0
 
-                -- Create export directory (mailbox dir name sanitized in Python)
-                set exportDir to "{safe_save_dir}/{safe_mailbox_dirname}_export"
+                -- Create export directory
+                set exportDir to "{safe_save_dir}/{safe_mailbox}_export"
                 do shell script "mkdir -p " & quoted form of exportDir
 
                 repeat with aMessage in mailboxMessages
+                    if exportCount >= {max_emails} then exit repeat
+
                     try
                         set messageSubject to subject of aMessage
                         set messageSender to sender of aMessage
@@ -550,8 +593,11 @@ def export_emails(
 
                 set outputText to outputText & "✓ Mailbox exported successfully!" & return & return
                 set outputText to outputText & "Mailbox: {safe_mailbox}" & return
-                set outputText to outputText & "Total emails: " & messageCount & return
+                set outputText to outputText & "Total emails in mailbox: " & messageCount & return
                 set outputText to outputText & "Exported: " & exportCount & return
+                if exportCount < messageCount then
+                    set outputText to outputText & "(capped at max_emails={max_emails})" & return
+                end if
                 set outputText to outputText & "Location: " & exportDir & return
 
             on error errMsg

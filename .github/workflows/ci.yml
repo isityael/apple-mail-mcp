@@ -53,8 +53,8 @@ jobs:
       - name: Check Python syntax
         run: uv run python -m py_compile apple_mail_mcp.py
 
-      - name: Verify 29 tools register
-        run: uv run python -c "from apple_mail_mcp import mcp; n = len(mcp._tool_manager._tools); assert n == 29, f'Expected 29 tools, got {n}'; print(f'OK: {n} tools registered')"
+      - name: Verify 37 tools register
+        run: uv run python -c "from apple_mail_mcp import mcp; n = len(mcp._tool_manager._tools); assert n == 37, f'Expected 37 tools, got {n}'; print(f'OK: {n} tools registered')"
 
   build:
     name: Build MCPB
@@ -70,7 +70,7 @@ jobs:
         run: |
           tool_count=$(python3 -c "import json; m=json.load(open('apple-mail-mcpb/manifest.json')); print(len(m['tools']))")
           echo "Tools in manifest: ${tool_count}"
-          [ "$tool_count" -eq 29 ] || { echo "ERROR: Expected 29, got ${tool_count}"; exit 1; }
+          [ "$tool_count" -eq 37 ] || { echo "ERROR: Expected 37, got ${tool_count}"; exit 1; }
 
       - name: Upload bundle
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7

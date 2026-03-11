@@ -13,9 +13,11 @@ except ImportError:
 # Import all tool modules to register @mcp.tool() decorators
 from apple_mail_mcp.tools import (
     analytics,  # noqa: F401  (4 tools)
+    bulk,  # noqa: F401  (3 tools)
     compose,  # noqa: F401  (4 tools)
     imap_sort,  # noqa: F401  (2 tools)
     inbox,  # noqa: F401  (6 tools)
-    manage,  # noqa: F401  (5 tools)
-    search,  # noqa: F401  (8 tools)
+    manage,  # noqa: F401  (6 tools)
+    search,  # noqa: F401  (9 tools)
+    smart_inbox,  # noqa: F401  (3 tools)
 )
