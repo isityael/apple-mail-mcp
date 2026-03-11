@@ -8,19 +8,11 @@ when:
 
 steps:
   - name: build-mcpb
-    image: debian:bookworm-slim@sha256:74d56e3931e0d5a1dd51f8c8a2466d21de84a271cd3b5a733b803aa91abf4421
+    image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
     commands:
-      - apt-get update -qq && apt-get install -y -qq zip python3 > /dev/null
+      - apk add --no-cache bash zip jq
       - bash apple-mail-mcpb/build-mcpb.sh
-
-  - name: verify-manifest
-    image: python:3.14-slim@sha256:6a27522252aef8432841f224d9baaa6e9fce07b07584154fa0b9a96603af7456
-    commands:
       - |
-        python3 << 'PYEOF'
-        import json
-        m = json.load(open("apple-mail-mcpb/manifest.json"))
-        n = len(m["tools"])
-        assert n == 37, "Expected 37 tools, got %d" % n
-        print("OK: %d tools in manifest" % n)
-        PYEOF
+        n=$(jq '.tools | length' apple-mail-mcpb/manifest.json)
+        [ "$n" -eq 37 ] || { echo "ERROR: Expected 37 tools, got $n"; exit 1; }
+        echo "OK: $n tools in manifest"
