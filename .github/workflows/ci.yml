@@ -52,10 +52,16 @@ jobs:
         run: uv sync --frozen
 
       - name: Check Python syntax
-        run: uv run python -m py_compile apple_mail_mcp.py
+        run: uv run python -c "import apple_mail_mcp"
 
       - name: Verify 37 tools register
-        run: uv run python -c "from apple_mail_mcp import mcp; n = len(mcp._tool_manager._tools); assert n == 37, f'Expected 37 tools, got {n}'; print(f'OK: {n} tools registered')"
+        run: |
+          uv run python -c "
+          from apple_mail_mcp import mcp
+          n = len(mcp._tool_manager._tools)
+          assert n == 37, 'Expected 37 tools, got %d' % n
+          print('OK: %d tools registered' % n)
+          "
 
   build:
     name: Build MCPB
