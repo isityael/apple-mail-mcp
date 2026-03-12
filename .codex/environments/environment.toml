@@ -1,0 +1,114 @@
+version = 1
+name = "apple-mail-mcp"
+
+[setup]
+script = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[codex] Initialising apple-mail-mcp environment"
+
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+export PYTHONUNBUFFERED=1
+export UV_PROJECT_ENVIRONMENT=.venv
+export UV_LINK_MODE=copy
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$PWD/.uv-cache}"
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "[codex] ERROR: curl is required to bootstrap uv"
+  exit 1
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[codex] Installing uv"
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+fi
+
+echo "[codex] Ensuring Python 3.13 is available"
+uv python install 3.13
+
+echo "[codex] Syncing locked dependencies"
+uv sync --frozen --python 3.13
+
+echo "[codex] Verifying import surface"
+uv run python -c "import apple_mail_mcp"
+
+echo "[codex] Verifying tool registration count"
+uv run python - <<'PY'
+from apple_mail_mcp import mcp
+
+n = len(mcp._tool_manager._tools)
+assert n == 37, f"Expected 37 tools, got {n}"
+print(f"OK: {n} tools registered")
+PY
+
+mkdir -p "$HOME/.config/apple-mail-mcp"
+
+if [ ! -f "$HOME/.config/apple-mail-mcp/imap.json" ]; then
+  echo "[codex] IMAP config not present at ~/.config/apple-mail-mcp/imap.json"
+  echo "[codex] IMAP-only tools stay unavailable until ~/.config/apple-mail-mcp/imap.json or PROTON_BRIDGE_* env vars are provided"
+fi
+
+echo "[codex] Linux environments are validation-only for this repo"
+echo "[codex] Apple Mail automation requires macOS with Mail.app permissions, so do not try to run the live MCP backend remotely"
+echo "[codex] Recommended remote commands:"
+echo "  uv run ruff check ."
+echo "  uv run ruff format --check ."
+echo "  uv run python -c 'import apple_mail_mcp'"
+echo "  bash apple-mail-mcpb/build-mcpb.sh"
+'''
+
+[setup.darwin]
+script = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[codex] Initialising apple-mail-mcp environment on macOS"
+
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+export PYTHONUNBUFFERED=1
+export UV_PROJECT_ENVIRONMENT=.venv
+export UV_LINK_MODE=copy
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$PWD/.uv-cache}"
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "[codex] ERROR: curl is required to bootstrap uv"
+  exit 1
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[codex] Installing uv"
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+fi
+
+echo "[codex] Ensuring Python 3.13 is available"
+uv python install 3.13
+
+echo "[codex] Syncing locked dependencies"
+uv sync --frozen --python 3.13
+
+echo "[codex] Verifying import surface"
+uv run python -c "import apple_mail_mcp"
+
+echo "[codex] Verifying tool registration count"
+uv run python - <<'PY'
+from apple_mail_mcp import mcp
+
+n = len(mcp._tool_manager._tools)
+assert n == 37, f"Expected 37 tools, got {n}"
+print(f"OK: {n} tools registered")
+PY
+
+mkdir -p "$HOME/.config/apple-mail-mcp"
+
+if [ ! -f "$HOME/.config/apple-mail-mcp/imap.json" ]; then
+  echo "[codex] IMAP config not present at ~/.config/apple-mail-mcp/imap.json"
+  echo "[codex] IMAP-only tools stay unavailable until ~/.config/apple-mail-mcp/imap.json or PROTON_BRIDGE_* env vars are provided"
+fi
+
+echo "[codex] macOS runtime path:"
+echo "  ./start_mcp.sh"
+echo "[codex] Mail.app access still requires local Automation and Mail Data Access permissions"
+'''
