@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_FILE_PATH\" | grep -q '\\.py$'; then cd /Users/smeya/git/apple-mail-mcp && uv run ruff format --quiet \"$CLAUDE_FILE_PATH\" 2>/dev/null; uv run ruff check --fix --quiet \"$CLAUDE_FILE_PATH\" 2>/dev/null; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_FILE_PATH\" | grep -qE 'imap\\.json|\\.env$'; then echo 'BLOCK: Cannot edit credential files (imap.json, .env)' && exit 1; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
