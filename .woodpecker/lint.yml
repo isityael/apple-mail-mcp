@@ -4,7 +4,7 @@ when:
 
 steps:
   - name: ruff
-    image: ghcr.io/astral-sh/uv:python3.13-alpine@sha256:4d9ff8f3d71cbb0d885e4ac0327e4f2456ea879713d6f260849af203d3b7a386
+    image: ghcr.io/astral-sh/uv:python3.13-alpine@sha256:6e2a6c29c5d6e2e99479a2b8a4f14e717e3403a5e49631800466bbdd2a878929
     commands:
       - uv sync --frozen
       - uv run ruff check .
