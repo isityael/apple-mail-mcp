@@ -5,7 +5,7 @@ when:
 
 steps:
   - name: syntax-and-tools
-    image: ghcr.io/astral-sh/uv:python3.13-alpine@sha256:6e2a6c29c5d6e2e99479a2b8a4f14e717e3403a5e49631800466bbdd2a878929
+    image: ghcr.io/astral-sh/uv:python3.14-alpine@sha256:854be5a4ef8b701008c2bef4075df76284065636af5efdc8b017f2f2749de95c
     commands:
       - uv sync --frozen
       - uv run python -c "import apple_mail_mcp"
