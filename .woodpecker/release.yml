@@ -9,7 +9,7 @@ steps:
       - bash apple-mail-mcpb/build-mcpb.sh
 
   - name: release
-    image: woodpeckerci/plugin-release@sha256:48a9ce5e4b82bb45098f51296d6232e68d58204d1edd46cc793a1458481f0584
+    image: woodpeckerci/plugin-release@sha256:a440616606c466da664c4fc3e73ad2d770e153528e72fb9ad94673a06563c72f
     settings:
       api_key:
         from_secret: forgejo_token
