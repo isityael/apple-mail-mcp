@@ -2,6 +2,7 @@ when:
   - event: manual
   - event: [push, pull_request]
     branch: main
+  - event: tag
 
 steps:
   - name: ruff
