@@ -3,6 +3,7 @@ depends_on:
   - check
 
 when:
+  - event: manual
   - event: [push, pull_request]
     branch: main
 
