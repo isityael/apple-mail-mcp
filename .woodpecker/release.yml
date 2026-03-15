@@ -40,5 +40,6 @@ steps:
       - git config user.email "ci@m0sh1.cc"
       - git add Formula/apple-mail-mcp.rb
       - git diff --cached --quiet && echo "No changes" && exit 0
-      - git commit -m "chore(apple-mail-mcp): bump to ${VERSION}"
-      - git push
+      - |
+        git commit -m "chore(apple-mail-mcp) bump to ${VERSION}"
+        git push
