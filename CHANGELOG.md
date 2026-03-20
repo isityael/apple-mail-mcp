@@ -10,11 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Read-only mode**: `--read-only` runtime flag plus packaged `.mcpb` toggle to hide send-capable tools and block draft sending
 - **HTML compose support**: `compose_email` now accepts `body_html` for rich Mail.app composition
+- **Automated release notes**: tag pipelines now generate GitHub release notes from commit history and attach them to releases
 
 ### Changed
 - **CI/CD**: Migrated to a single Woodpecker pipeline in `.woodpecker.yml` and removed the GitHub Actions workflow
 - **Reply robustness**: `reply_to_email` now uses temp-file-backed body loading, fixed reply-to-all AppleScript syntax, and preserves quoted originals better in open mode
 - **Search performance**: native Mail `whose` filtering is now used for body-search paths where feasible without changing the existing search tool APIs
+- **Release artifacts**: tag builds now produce version-matched `.mcpb` archives, checksums, and published GitHub release assets from Woodpecker
 
 ## [2.1.0] - 2026-03-11
 

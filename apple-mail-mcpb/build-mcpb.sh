@@ -17,7 +17,8 @@ SOURCE_DIR="${SCRIPT_DIR}/.."
 BUILD_DIR="${SCRIPT_DIR}/build"
 OUTPUT_DIR="${SCRIPT_DIR}/../"
 PACKAGE_NAME="apple-mail-mcp"
-VERSION=$(grep '"version"' "${SCRIPT_DIR}/manifest.json" | sed -E 's/.*"version": "([^"]+)".*/\1/')
+MANIFEST_VERSION=$(grep '"version"' "${SCRIPT_DIR}/manifest.json" | sed -E 's/.*"version": "([^"]+)".*/\1/')
+VERSION="${APPLE_MAIL_MCP_VERSION:-${MANIFEST_VERSION}}"
 
 echo -e "${GREEN}Building Apple Mail MCP Bundle v${VERSION}${NC}"
 echo "========================================="
@@ -30,6 +31,20 @@ mkdir -p "${BUILD_DIR}"
 # Step 2: Copy manifest.json
 echo -e "\n${YELLOW}Step 2: Copying manifest.json...${NC}"
 cp "${SCRIPT_DIR}/manifest.json" "${BUILD_DIR}/"
+if [ "${VERSION}" != "${MANIFEST_VERSION}" ]; then
+    python3 - "${BUILD_DIR}/manifest.json" "${VERSION}" << 'PY'
+import json
+import pathlib
+import sys
+
+manifest_path = pathlib.Path(sys.argv[1])
+version = sys.argv[2]
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["version"] = version
+manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+PY
+    echo -e "  ${GREEN}ok${NC} Overrode manifest version to ${VERSION}"
+fi
 
 # Step 3: Copy Python source files
 echo -e "\n${YELLOW}Step 3: Copying Python source files...${NC}"
@@ -129,7 +144,7 @@ claude plugin add skill-email-management
 
 Or manually copy `skill-email-management/` from this bundle to `~/.claude/skills/email-management`
 
-## Tools (29)
+## Tools (37)
 
 ### Inbox & Discovery (7)
 - **get_inbox_overview** - Comprehensive inbox status across all accounts

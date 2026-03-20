@@ -129,6 +129,17 @@ For `.mcpb` installs, the same behavior is available through the **Read-Only Mod
 
 `compose_email` now supports an optional `body_html` parameter for rich email formatting. If `body_html` is omitted, the existing plain-text behavior is unchanged.
 
+## Releases
+
+Stable releases are tag-driven. When a tag such as `v2.1.2` is pushed, Woodpecker now:
+
+- builds a version-matched `.mcpb` archive
+- generates release notes from commit history
+- uploads the bundle, checksum, and notes to the GitHub release
+- updates the Homebrew tap after the GitHub release succeeds
+
+Regular pushes to `main` still run CI and build verification, but they do not publish a stable GitHub release.
+
 ### Safety Limits
 
 Batch operations have conservative defaults to prevent accidental bulk actions:

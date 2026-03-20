@@ -17,6 +17,8 @@ steps:
     commands:
       - uv sync --frozen
       - uv run python -c "import apple_mail_mcp"
+      - uv run python tests/test_runtime_features.py
+      - uv run python tests/test_release_notes.py
       - |
         uv run python << 'PYEOF'
         from apple_mail_mcp import mcp
@@ -32,24 +34,71 @@ steps:
       - check
     commands:
       - apk add --no-cache bash zip jq
+      - |
+        if [ -n "${CI_COMMIT_TAG}" ]; then
+          export APPLE_MAIL_MCP_VERSION="${CI_COMMIT_TAG#v}"
+          echo "Building tagged release ${APPLE_MAIL_MCP_VERSION}"
+        fi
       - bash apple-mail-mcpb/build-mcpb.sh
       - |
         n=$(jq '.tools | length' apple-mail-mcpb/manifest.json)
         [ "$n" -eq 37 ] || { echo "ERROR: Expected 37 tools, got $n"; exit 1; }
         echo "OK: $n tools in manifest"
+      - |
+        if [ -n "${CI_COMMIT_TAG}" ]; then
+          MCPB_FILE="apple-mail-mcp-v${CI_COMMIT_TAG#v}.mcpb"
+        else
+          MCPB_FILE="$(find . -maxdepth 1 -name 'apple-mail-mcp-v*.mcpb' | head -n 1)"
+        fi
+        test -n "${MCPB_FILE}" && test -f "${MCPB_FILE}"
+        sha256sum "${MCPB_FILE}" > "${MCPB_FILE}.sha256"
 
-  - name: github-release
-    image: woodpeckerci/plugin-release@sha256:caf18bc34de626dff1de0cc0638ee8dff11af6c9372a5f3d79ab27b91a5ee4d9
+  - name: release-notes
+    image: ghcr.io/astral-sh/uv:python3.14-alpine@sha256:2d328eb17f7d6a8c3996d2de739e78b18c96a6b89ce72ee665a4aa06088ac629
     depends_on:
       - build-mcpb
     when:
       - event: tag
-    settings:
-      api_key:
+    commands:
+      - apk add --no-cache git
+      - |
+        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          git fetch --force --tags --unshallow
+        else
+          git fetch --force --tags
+        fi
+      - uv run python scripts/generate_release_notes.py --repo isityael/apple-mail-mcp --tag "${CI_COMMIT_TAG}" --output RELEASE_NOTES.md
+      - VERSION="${CI_COMMIT_TAG#v}"
+      - cp RELEASE_NOTES.md "apple-mail-mcp-v${VERSION}.release-notes.md"
+      - test -s "apple-mail-mcp-v${VERSION}.release-notes.md"
+
+  - name: github-release
+    image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
+    depends_on:
+      - release-notes
+    when:
+      - event: tag
+    environment:
+      GITHUB_TOKEN:
         from_secret: github_token
-      files:
-        - "*.mcpb"
-      title: "Release ${CI_COMMIT_TAG}"
+    commands:
+      - apk add --no-cache git gh
+      - export GH_TOKEN="${GITHUB_TOKEN}"
+      - VERSION="${CI_COMMIT_TAG#v}"
+      - MCPB_FILE="apple-mail-mcp-v${VERSION}.mcpb"
+      - SHA_FILE="${MCPB_FILE}.sha256"
+      - NOTES_FILE="apple-mail-mcp-v${VERSION}.release-notes.md"
+      - |
+        for file in "${MCPB_FILE}" "${SHA_FILE}" "${NOTES_FILE}"; do
+          test -f "${file}" || { echo "Missing release asset: ${file}"; exit 1; }
+        done
+      - |
+        if gh release view "${CI_COMMIT_TAG}" --repo "isityael/apple-mail-mcp" >/dev/null 2>&1; then
+          gh release upload "${CI_COMMIT_TAG}" "${MCPB_FILE}" "${SHA_FILE}" "${NOTES_FILE}" --repo "isityael/apple-mail-mcp" --clobber
+          gh release edit "${CI_COMMIT_TAG}" --repo "isityael/apple-mail-mcp" --title "Release ${CI_COMMIT_TAG}" --notes-file "${NOTES_FILE}"
+        else
+          gh release create "${CI_COMMIT_TAG}" "${MCPB_FILE}" "${SHA_FILE}" "${NOTES_FILE}" --repo "isityael/apple-mail-mcp" --verify-tag --title "Release ${CI_COMMIT_TAG}" --notes-file "${NOTES_FILE}"
+        fi
 
   - name: update-homebrew
     image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
