@@ -7,6 +7,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from scripts import generate_release_notes
 from scripts.generate_release_notes import Commit, find_previous_tag, group_for_subject, render_release_notes
 
 
@@ -38,7 +39,13 @@ def test_render_release_notes():
 
 
 def test_find_previous_tag_skips_current():
-    previous = find_previous_tag("v2.1.1")
+    original = generate_release_notes.list_semver_tags
+    generate_release_notes.list_semver_tags = lambda: ["v2.1.1", "v2.1.0", "v2.0.0"]
+    try:
+        previous = find_previous_tag("v2.1.1")
+    finally:
+        generate_release_notes.list_semver_tags = original
+
     assert previous == "v2.1.0"
 
 
