@@ -27,7 +27,7 @@ steps:
         PYEOF
 
   - name: release
-    image: dhi.io/bun:1.3.11-debian13-dev@sha256:4a6c1d2ed4cae941683200d75478829cde06436ca18735d7fc945ae68d93f2ba
+    image: harbor.m0sh1.cc/apps/bun-git:1.3.11-debian13-dev
     depends_on:
       - lint
       - check
@@ -40,7 +40,6 @@ steps:
       GH_TOKEN:
         from_secret: github_token
     commands:
-      - apt-get update -qq && apt-get install -y -q git
       - git config user.name "woodpecker[bot]"
       - git config user.email "woodpecker@m0sh1.cc"
       - git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/isityael/apple-mail-mcp.git"
