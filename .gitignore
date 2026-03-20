@@ -37,6 +37,9 @@ create/
 apple-mail-mcpb/build/
 *.mcpb
 
+# Node.js (semantic-release)
+node_modules/
+
 # Archive
 archive/
 

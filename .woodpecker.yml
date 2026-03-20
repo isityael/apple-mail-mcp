@@ -18,7 +18,6 @@ steps:
       - uv sync --frozen
       - uv run python -c "import apple_mail_mcp"
       - uv run python tests/test_runtime_features.py
-      - uv run python tests/test_release_notes.py
       - |
         uv run python << 'PYEOF'
         from apple_mail_mcp import mcp
@@ -26,6 +25,27 @@ steps:
         assert n == 37, "Expected 37 tools, got %d" % n
         print("OK: %d tools registered" % n)
         PYEOF
+
+  - name: release
+    image: oven/bun:1-debian
+    depends_on:
+      - lint
+      - check
+    when:
+      - event: push
+        branch: main
+    environment:
+      GITHUB_TOKEN:
+        from_secret: github_token
+      GH_TOKEN:
+        from_secret: github_token
+    commands:
+      - git config user.name "woodpecker[bot]"
+      - git config user.email "woodpecker@m0sh1.cc"
+      - git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/isityael/apple-mail-mcp.git"
+      - git fetch --tags origin
+      - bun install --frozen-lockfile
+      - bunx semantic-release
 
   - name: build-mcpb
     image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
@@ -53,29 +73,10 @@ steps:
           echo "Non-tag build: skipping release asset checksum generation"
         fi
 
-  - name: release-notes
-    image: ghcr.io/astral-sh/uv:python3.14-alpine@sha256:2d328eb17f7d6a8c3996d2de739e78b18c96a6b89ce72ee665a4aa06088ac629
-    depends_on:
-      - build-mcpb
-    when:
-      - event: tag
-    commands:
-      - apk add --no-cache git
-      - |
-        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-          git fetch --force --tags --unshallow
-        else
-          git fetch --force --tags
-        fi
-      - uv run python scripts/generate_release_notes.py --repo isityael/apple-mail-mcp --tag "${CI_COMMIT_TAG}" --output RELEASE_NOTES.md
-      - VERSION="${CI_COMMIT_TAG#v}"
-      - cp RELEASE_NOTES.md "apple-mail-mcp-v${VERSION}.release-notes.md"
-      - test -s "apple-mail-mcp-v${VERSION}.release-notes.md"
-
   - name: github-release
     image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
     depends_on:
-      - release-notes
+      - build-mcpb
     when:
       - event: tag
     environment:
@@ -87,18 +88,11 @@ steps:
       - VERSION="${CI_COMMIT_TAG#v}"
       - MCPB_FILE="apple-mail-mcp-v${VERSION}.mcpb"
       - SHA_FILE="${MCPB_FILE}.sha256"
-      - NOTES_FILE="apple-mail-mcp-v${VERSION}.release-notes.md"
       - |
-        for file in "${MCPB_FILE}" "${SHA_FILE}" "${NOTES_FILE}"; do
-          test -f "${file}" || { echo "Missing release asset: ${file}"; exit 1; }
+        for file in "${MCPB_FILE}" "${SHA_FILE}"; do
+          test -f "${file}" || { echo "Missing: ${file}"; exit 1; }
         done
-      - |
-        if gh release view "${CI_COMMIT_TAG}" --repo "isityael/apple-mail-mcp" >/dev/null 2>&1; then
-          gh release upload "${CI_COMMIT_TAG}" "${MCPB_FILE}" "${SHA_FILE}" "${NOTES_FILE}" --repo "isityael/apple-mail-mcp" --clobber
-          gh release edit "${CI_COMMIT_TAG}" --repo "isityael/apple-mail-mcp" --title "Release ${CI_COMMIT_TAG}" --notes-file "${NOTES_FILE}"
-        else
-          gh release create "${CI_COMMIT_TAG}" "${MCPB_FILE}" "${SHA_FILE}" "${NOTES_FILE}" --repo "isityael/apple-mail-mcp" --verify-tag --title "Release ${CI_COMMIT_TAG}" --notes-file "${NOTES_FILE}"
-        fi
+      - gh release upload "${CI_COMMIT_TAG}" "${MCPB_FILE}" "${SHA_FILE}" --repo "isityael/apple-mail-mcp" --clobber
 
   - name: update-homebrew
     image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
