@@ -32,17 +32,8 @@ mkdir -p "${BUILD_DIR}"
 echo -e "\n${YELLOW}Step 2: Copying manifest.json...${NC}"
 cp "${SCRIPT_DIR}/manifest.json" "${BUILD_DIR}/"
 if [ "${VERSION}" != "${MANIFEST_VERSION}" ]; then
-    python3 - "${BUILD_DIR}/manifest.json" "${VERSION}" << 'PY'
-import json
-import pathlib
-import sys
-
-manifest_path = pathlib.Path(sys.argv[1])
-version = sys.argv[2]
-manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-manifest["version"] = version
-manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-PY
+    jq --arg v "${VERSION}" '.version = $v' "${BUILD_DIR}/manifest.json" > "${BUILD_DIR}/manifest.json.tmp"
+    mv "${BUILD_DIR}/manifest.json.tmp" "${BUILD_DIR}/manifest.json"
     echo -e "  ${GREEN}ok${NC} Overrode manifest version to ${VERSION}"
 fi
 
