@@ -165,7 +165,7 @@ def test_reply_to_email_uses_temp_file_and_fixed_reply_all_syntax():
         server.READ_ONLY = old_read_only
 
     assert result == "REPLY_OK"
-    assert 'reply foundMessage with opening window and reply to all' in captured["script"]
+    assert "reply foundMessage with opening window and reply to all" in captured["script"]
     assert 'set replyBodyText to do shell script "cat " & quoted form of "' in captured["script"]
     assert "Line 1" not in captured["script"]
 

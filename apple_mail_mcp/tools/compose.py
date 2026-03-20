@@ -82,15 +82,14 @@ def _send_html_email(
     to_lines = ""
     for addr in [a.strip() for a in to.split(",") if a.strip()]:
         to_lines += (
-            'make new to recipient at end of to recipients with '
-            f'properties {{address:"{escape_applescript(addr)}"}}\n'
+            f'make new to recipient at end of to recipients with properties {{address:"{escape_applescript(addr)}"}}\n'
         )
 
     cc_lines = ""
     if cc:
         for addr in [a.strip() for a in cc.split(",") if a.strip()]:
             cc_lines += (
-                'make new cc recipient at end of cc recipients with '
+                "make new cc recipient at end of cc recipients with "
                 f'properties {{address:"{escape_applescript(addr)}"}}\n'
             )
 
@@ -98,7 +97,7 @@ def _send_html_email(
     if bcc:
         for addr in [a.strip() for a in bcc.split(",") if a.strip()]:
             bcc_lines += (
-                'make new bcc recipient at end of bcc recipients with '
+                "make new bcc recipient at end of bcc recipients with "
                 f'properties {{address:"{escape_applescript(addr)}"}}\n'
             )
 
@@ -256,9 +255,9 @@ def reply_to_email(
         body_temp_path = body_tmp.name
 
     if reply_to_all:
-        reply_command = 'set replyMessage to reply foundMessage with opening window and reply to all'
+        reply_command = "set replyMessage to reply foundMessage with opening window and reply to all"
     else:
-        reply_command = 'set replyMessage to reply foundMessage with opening window'
+        reply_command = "set replyMessage to reply foundMessage with opening window"
 
     cc_script = ""
     if cc:
@@ -392,21 +391,21 @@ def reply_to_email(
     '''
 
     if cc:
-        script += f'''
+        script += f"""
                 set outputText to outputText & "CC: {safe_cc}" & return
-    '''
+    """
 
     if bcc:
-        script += f'''
+        script += f"""
                 set outputText to outputText & "BCC: {safe_bcc}" & return
-    '''
+    """
 
     if attachments:
         script += f'''
                 set outputText to outputText & "Attachments:" & return & "{safe_attachment_info}" & return
     '''
 
-    script += f'''
+    script += f"""
             else
                 set outputText to outputText & "No email found matching: {safe_subject_keyword}" & return
             end if
@@ -422,7 +421,7 @@ def reply_to_email(
 
         return outputText
     end tell
-    '''
+    """
 
     try:
         return run_applescript(script)
