@@ -111,7 +111,7 @@ echo -e "\n${YELLOW}Step 7: Creating README...${NC}"
 cat > "${BUILD_DIR}/README.md" << 'EOF'
 # Apple Mail MCP Server
 
-Natural language interface for Apple Mail with 29 email management tools.
+Natural language interface for Apple Mail with 37 email management tools.
 
 ## Quick Installation
 
@@ -176,6 +176,12 @@ Or manually copy `skill-email-management/` from this bundle to `~/.claude/skills
 
 **Email Preferences (Optional):**
 Configure preferences in Claude Desktop settings under this MCP to customize behavior (default account, max results, preferred folders).
+
+**Read-Only Mode (Optional):**
+Enable Read-Only Mode in Claude Desktop MCP settings to hide send-capable tools and block draft sending while keeping inbox/search/organization workflows available.
+
+**HTML Compose Support:**
+`compose_email` supports an optional HTML body parameter for rich formatting while preserving the plain-text path by default.
 
 ## Requirements
 

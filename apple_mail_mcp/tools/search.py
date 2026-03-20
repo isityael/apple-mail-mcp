@@ -8,6 +8,56 @@ from apple_mail_mcp.core import LOWERCASE_HANDLER, escape_applescript, inject_pr
 from apple_mail_mcp.server import mcp
 
 
+def _build_native_whose_clause(
+    *,
+    subject: str | None = None,
+    sender: str | None = None,
+    body: str | None = None,
+    read_status: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> tuple[str, list[str]]:
+    """Build date setup and `whose` conditions for native Mail.app filtering."""
+    conditions: list[str] = []
+    date_setup = ""
+
+    if subject:
+        conditions.append(f'subject contains "{escape_applescript(subject)}"')
+    if sender:
+        conditions.append(f'sender contains "{escape_applescript(sender)}"')
+    if body:
+        conditions.append(f'content contains "{escape_applescript(body)}"')
+
+    if read_status == "read":
+        conditions.append("read status is true")
+    elif read_status == "unread":
+        conditions.append("read status is false")
+
+    if date_from:
+        y, m, d = date_from.split("-")
+        date_setup += f"""
+            set dateFrom to current date
+            set year of dateFrom to {int(y)}
+            set month of dateFrom to {int(m)}
+            set day of dateFrom to {int(d)}
+            set time of dateFrom to 0
+        """
+        conditions.append("date received >= dateFrom")
+
+    if date_to:
+        y, m, d = date_to.split("-")
+        date_setup += f"""
+            set dateTo to current date
+            set year of dateTo to {int(y)}
+            set month of dateTo to {int(m)}
+            set day of dateTo to {int(d)}
+            set time of dateTo to 86399
+        """
+        conditions.append("date received <= dateTo")
+
+    return date_setup, conditions
+
+
 @mcp.tool()
 @inject_preferences
 def get_email_with_content(
@@ -711,23 +761,22 @@ def search_email_content(
     Returns:
         Emails where the search text appears in body and/or subject
     """
-    escaped_search = escape_applescript(search_text).lower()
+    escaped_search = escape_applescript(search_text)
     escaped_account = escape_applescript(account)
     escaped_mailbox = escape_applescript(mailbox)
+
     search_conditions = []
     if search_subject:
-        search_conditions.append(f'lowerSubject contains "{escaped_search}"')
+        search_conditions.append(f'subject contains "{escaped_search}"')
     if search_body:
-        search_conditions.append(f'lowerContent contains "{escaped_search}"')
-    search_condition = " or ".join(search_conditions) if search_conditions else "false"
+        search_conditions.append(f'content contains "{escaped_search}"')
+    native_filter = " or ".join(search_conditions) if search_conditions else "false"
 
     script = f'''
-    {LOWERCASE_HANDLER}
-
     tell application "Mail"
         set outputText to "\U0001f50e CONTENT SEARCH: {escaped_search}" & return
         set outputText to outputText & "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501" & return
-        set outputText to outputText & "\u26a0 Note: Body search is slower - searching {max_results} results max" & return & return
+        set outputText to outputText & "\u26a0 Native Mail body filtering in use" & return & return
         set resultCount to 0
         try
             set targetAccount to account "{escaped_account}"
@@ -740,48 +789,44 @@ def search_email_content(
                     error "Mailbox not found: {escaped_mailbox}"
                 end if
             end try
-            set mailboxMessages to every message of targetMailbox
-            repeat with aMessage in mailboxMessages
+            set matchedMessages to (every message of targetMailbox whose {native_filter})
+            repeat with aMessage in matchedMessages
                 if resultCount >= {max_results} then exit repeat
                 try
                     set messageSubject to subject of aMessage
+                    set messageSender to sender of aMessage
+                    set messageDate to date received of aMessage
+                    set messageRead to read status of aMessage
                     set msgContent to ""
                     try
                         set msgContent to content of aMessage
                     end try
-                    set lowerSubject to my lowercase(messageSubject)
-                    set lowerContent to my lowercase(msgContent)
-                    if {search_condition} then
-                        set messageSender to sender of aMessage
-                        set messageDate to date received of aMessage
-                        set messageRead to read status of aMessage
-                        if messageRead then
-                            set readIndicator to "\u2713"
-                        else
-                            set readIndicator to "\u2709"
-                        end if
-                        set outputText to outputText & readIndicator & " " & messageSubject & return
-                        set outputText to outputText & "   From: " & messageSender & return
-                        set outputText to outputText & "   Date: " & (messageDate as string) & return
-                        set outputText to outputText & "   Mailbox: {escaped_mailbox}" & return
-                        try
-                            set AppleScript's text item delimiters to {{return, linefeed}}
-                            set contentParts to text items of msgContent
-                            set AppleScript's text item delimiters to " "
-                            set cleanText to contentParts as string
-                            set AppleScript's text item delimiters to ""
-                            if length of cleanText > {max_content_length} then
-                                set contentPreview to text 1 thru {max_content_length} of cleanText & "..."
-                            else
-                                set contentPreview to cleanText
-                            end if
-                            set outputText to outputText & "   Content: " & contentPreview & return
-                        on error
-                            set outputText to outputText & "   Content: [Not available]" & return
-                        end try
-                        set outputText to outputText & return
-                        set resultCount to resultCount + 1
+                    if messageRead then
+                        set readIndicator to "\u2713"
+                    else
+                        set readIndicator to "\u2709"
                     end if
+                    set outputText to outputText & readIndicator & " " & messageSubject & return
+                    set outputText to outputText & "   From: " & messageSender & return
+                    set outputText to outputText & "   Date: " & (messageDate as string) & return
+                    set outputText to outputText & "   Mailbox: {escaped_mailbox}" & return
+                    try
+                        set AppleScript's text item delimiters to {{return, linefeed}}
+                        set contentParts to text items of msgContent
+                        set AppleScript's text item delimiters to " "
+                        set cleanText to contentParts as string
+                        set AppleScript's text item delimiters to ""
+                        if length of cleanText > {max_content_length} then
+                            set contentPreview to text 1 thru {max_content_length} of cleanText & "..."
+                        else
+                            set contentPreview to cleanText
+                        end if
+                        set outputText to outputText & "   Content: " & contentPreview & return
+                    on error
+                        set outputText to outputText & "   Content: [Not available]" & return
+                    end try
+                    set outputText to outputText & return
+                    set resultCount to resultCount + 1
                 end try
             end repeat
             set outputText to outputText & "========================================" & return
@@ -1530,24 +1575,22 @@ def search_emails_advanced(
     """
     from apple_mail_mcp.core import build_mailbox_ref, skip_folders_condition
 
-    # Escape inputs
     escaped_account = escape_applescript(account) if account else None
+    date_setup, whose_conditions = _build_native_whose_clause(
+        subject=subject_contains,
+        sender=sender_contains,
+        body=body_contains,
+        read_status="read" if is_read is True else "unread" if is_read is False else None,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    fetch_script = (
+        f"set mailboxMessages to (every message of aMailbox whose {' and '.join(whose_conditions)})"
+        if whose_conditions
+        else "set mailboxMessages to every message of aMailbox"
+    )
 
-    # --- Build filter conditions applied inside the message loop ---
     filter_lines: list[str] = []
-    if subject_contains:
-        esc = escape_applescript(subject_contains)
-        filter_lines.append(f'if lowerSubject does not contain my lowercase("{esc}") then set skipMsg to true')
-    if sender_contains:
-        esc = escape_applescript(sender_contains)
-        filter_lines.append(f'if lowerSender does not contain my lowercase("{esc}") then set skipMsg to true')
-    if body_contains:
-        esc = escape_applescript(body_contains)
-        filter_lines.append(f'if lowerBody does not contain my lowercase("{esc}") then set skipMsg to true')
-    if is_read is True:
-        filter_lines.append("if not messageRead then set skipMsg to true")
-    elif is_read is False:
-        filter_lines.append("if messageRead then set skipMsg to true")
     if has_attachments is True:
         filter_lines.append("if (count of mail attachments of aMessage) = 0 then set skipMsg to true")
     elif has_attachments is False:
@@ -1558,40 +1601,6 @@ def search_emails_advanced(
         filter_lines.append("if (flagged status of aMessage) then set skipMsg to true")
 
     filter_block = "\n                                    ".join(filter_lines)
-
-    # Date filters
-    date_setup = ""
-    date_checks = ""
-    if date_from:
-        esc_from = escape_applescript(date_from)
-        date_setup += f'''
-        set fromDateStr to "{esc_from}"
-        set fromDate to date fromDateStr
-'''
-        date_checks += """
-                                    if messageDate < fromDate then set skipMsg to true
-"""
-    if date_to:
-        esc_to = escape_applescript(date_to)
-        date_setup += f'''
-        set toDateStr to "{esc_to}"
-        set toDate to (date toDateStr) + (1 * days)
-'''
-        date_checks += """
-                                    if messageDate > toDate then set skipMsg to true
-"""
-
-    # Body retrieval (only if needed)
-    if body_contains:
-        body_script = """
-                                    set msgBody to ""
-                                    try
-                                        set msgBody to content of aMessage
-                                    end try
-                                    set lowerBody to my lowercase(msgBody)
-"""
-    else:
-        body_script = '                                    set lowerBody to ""'
 
     # Account loop
     if account:
@@ -1673,8 +1682,6 @@ def search_emails_advanced(
 """
 
     script = f"""
-    {LOWERCASE_HANDLER}
-
     tell application "Mail"
         {output_setup}
         set resultCount to 0
@@ -1685,7 +1692,7 @@ def search_emails_advanced(
             try
                 {mbox_start}
 
-                        set mailboxMessages to every message of aMailbox
+                        {fetch_script}
                         repeat with aMessage in mailboxMessages
                             if resultCount >= {max_results} then exit repeat
                             try
@@ -1694,13 +1701,8 @@ def search_emails_advanced(
                                 set messageDate to date received of aMessage
                                 set messageRead to read status of aMessage
 
-                                set lowerSubject to my lowercase(messageSubject)
-                                set lowerSender to my lowercase(messageSender)
-                                {body_script}
-
                                 set skipMsg to false
                                     {filter_block}
-                                    {date_checks}
                                 if not skipMsg then
                                     {record_script}
                                     set resultCount to resultCount + 1

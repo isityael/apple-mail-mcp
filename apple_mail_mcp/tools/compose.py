@@ -1,9 +1,13 @@
 """Composition tools: sending, replying, forwarding, and drafts."""
 
 import os
+import subprocess
+import tempfile
 
+import apple_mail_mcp.server as server
 from apple_mail_mcp.core import escape_applescript, inbox_mailbox_script, inject_preferences, run_applescript
-from apple_mail_mcp.server import mcp
+
+mcp = server.mcp
 
 
 def _validate_attachment_paths(attachments: str) -> tuple[list[str], str | None]:
@@ -61,6 +65,149 @@ def _validate_attachment_paths(attachments: str) -> tuple[list[str], str | None]
     return resolved_paths, None
 
 
+def _send_html_email(
+    account: str,
+    to: str,
+    subject: str,
+    body_html: str,
+    cc: str | None = None,
+    bcc: str | None = None,
+    attachments_script: str = "",
+    mode: str = "send",
+) -> str:
+    """Send an HTML-formatted email using clipboard HTML injection."""
+    safe_account = escape_applescript(account)
+    escaped_subject = escape_applescript(subject)
+
+    to_lines = ""
+    for addr in [a.strip() for a in to.split(",") if a.strip()]:
+        to_lines += (
+            'make new to recipient at end of to recipients with '
+            f'properties {{address:"{escape_applescript(addr)}"}}\n'
+        )
+
+    cc_lines = ""
+    if cc:
+        for addr in [a.strip() for a in cc.split(",") if a.strip()]:
+            cc_lines += (
+                'make new cc recipient at end of cc recipients with '
+                f'properties {{address:"{escape_applescript(addr)}"}}\n'
+            )
+
+    bcc_lines = ""
+    if bcc:
+        for addr in [a.strip() for a in bcc.split(",") if a.strip()]:
+            bcc_lines += (
+                'make new bcc recipient at end of bcc recipients with '
+                f'properties {{address:"{escape_applescript(addr)}"}}\n'
+            )
+
+    if mode == "send":
+        post_paste_script = """
+            keystroke "d" using {command down, shift down}
+        """
+        success_text = "Email sent successfully (HTML)"
+    elif mode == "draft":
+        post_paste_script = """
+            keystroke "s" using command down
+            delay 0.5
+        """
+        success_text = "Email saved as draft (HTML)"
+    else:
+        post_paste_script = "-- Leave compose window open for review"
+        success_text = "Email opened in Mail for review (HTML). Edit and send when ready."
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".html",
+        prefix="mail_html_",
+        delete=False,
+        encoding="utf-8",
+    ) as tmp:
+        tmp.write(body_html)
+        html_temp_path = tmp.name
+
+    script = f'''
+use framework "Foundation"
+use framework "AppKit"
+use scripting additions
+
+set htmlString to do shell script "cat '{html_temp_path}'"
+set pb to current application's NSPasteboard's generalPasteboard()
+set oldClip to pb's stringForType:(current application's NSPasteboardTypeString)
+
+pb's clearContents()
+set htmlData to (current application's NSString's stringWithString:htmlString)'s dataUsingEncoding:(current application's NSUTF8StringEncoding)
+pb's setData:htmlData forType:(current application's NSPasteboardTypeHTML)
+
+tell application "Mail"
+    set newMsg to make new outgoing message with properties {{subject:"{escaped_subject}", content:"", visible:true}}
+    set emailAddrs to email addresses of account "{safe_account}"
+    set senderAddress to item 1 of emailAddrs
+    set sender of newMsg to senderAddress
+    tell newMsg
+        {to_lines}
+        {cc_lines}
+        {bcc_lines}
+        {attachments_script}
+    end tell
+    activate
+end tell
+
+delay 2.5
+
+tell application "System Events"
+    set frontmost of process "Mail" to true
+    delay 0.5
+    tell process "Mail"
+        repeat 7 times
+            key code 48
+            delay 0.1
+        end repeat
+        delay 0.3
+        keystroke "a" using command down
+        delay 0.2
+        keystroke "v" using command down
+        delay 0.5
+        {post_paste_script}
+    end tell
+end tell
+
+do shell script "rm -f '{html_temp_path}'"
+
+if oldClip is not missing value then
+    pb's clearContents()
+    pb's setString:oldClip forType:(current application's NSPasteboardTypeString)
+end if
+
+return "{success_text}"
+'''
+
+    try:
+        result = subprocess.run(
+            ["osascript", "-"],
+            input=script.encode("utf-8"),
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            return f"Error sending HTML email: {stderr}"
+
+        output = result.stdout.decode("utf-8", errors="replace").strip()
+        confirm = f"{output}\n\nFrom: {account}\nTo: {to}\nSubject: {subject}"
+        if cc:
+            confirm += f"\nCC: {cc}"
+        if bcc:
+            confirm += f"\nBCC: {bcc}"
+        return confirm
+    except subprocess.TimeoutExpired:
+        return "Error: HTML email script timed out"
+    finally:
+        if os.path.exists(html_temp_path):
+            os.unlink(html_temp_path)
+
+
 @mcp.tool()
 @inject_preferences
 def reply_to_email(
@@ -92,43 +239,49 @@ def reply_to_email(
         Confirmation message with details of the reply sent, saved draft, or opened draft
     """
 
-    # Escape all user inputs for AppleScript
+    if server.READ_ONLY:
+        return "Error: Server is running in read-only mode. Replying is disabled."
+
     safe_account = escape_applescript(account)
     safe_subject_keyword = escape_applescript(subject_keyword)
-    escaped_body = escape_applescript(reply_body)
 
-    # Build the reply command based on reply_to_all flag
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".txt",
+        prefix="mail_reply_",
+        delete=False,
+        encoding="utf-8",
+    ) as body_tmp:
+        body_tmp.write(reply_body)
+        body_temp_path = body_tmp.name
+
     if reply_to_all:
-        reply_command = "set replyMessage to reply foundMessage with opening window reply to all"
+        reply_command = 'set replyMessage to reply foundMessage with opening window and reply to all'
     else:
-        reply_command = "set replyMessage to reply foundMessage with opening window"
+        reply_command = 'set replyMessage to reply foundMessage with opening window'
 
-    # Build CC recipients if provided
     cc_script = ""
     if cc:
-        cc_addresses = [addr.strip() for addr in cc.split(",")]
-        for addr in cc_addresses:
+        for addr in [addr.strip() for addr in cc.split(",")]:
             safe_addr = escape_applescript(addr)
             cc_script += f'''
             make new cc recipient at end of cc recipients of replyMessage with properties {{address:"{safe_addr}"}}
             '''
 
-    # Build BCC recipients if provided
     bcc_script = ""
     if bcc:
-        bcc_addresses = [addr.strip() for addr in bcc.split(",")]
-        for addr in bcc_addresses:
+        for addr in [addr.strip() for addr in bcc.split(",")]:
             safe_addr = escape_applescript(addr)
             bcc_script += f'''
             make new bcc recipient at end of bcc recipients of replyMessage with properties {{address:"{safe_addr}"}}
             '''
 
-    # Build attachment script if provided
     attachment_script = ""
     attachment_info = ""
     if attachments:
         validated_paths, error = _validate_attachment_paths(attachments)
         if error:
+            os.unlink(body_temp_path)
             return error
         for path in validated_paths:
             safe_path = escape_applescript(path)
@@ -143,68 +296,60 @@ def reply_to_email(
     safe_bcc = escape_applescript(bcc) if bcc else ""
     safe_attachment_info = escape_applescript(attachment_info) if attachment_info else ""
 
-    # Resolve delivery mode: mode parameter takes precedence over send boolean
     if mode is not None:
         if mode not in ("send", "draft", "open"):
+            os.unlink(body_temp_path)
             return f"Error: Invalid mode '{mode}'. Use: send, draft, open"
         effective_mode = mode
     else:
         effective_mode = "send" if send else "draft"
 
-    # Determine behavior per mode
+    read_body_script = f'set replyBodyText to do shell script "cat " & quoted form of "{body_temp_path}"'
+
     if effective_mode == "send":
         header_text = "SENDING REPLY"
         send_or_draft_command = "send replyMessage"
-        success_text = "✓ Reply sent successfully!"
-        # For send, Mail handles the quoted original via the HTML layer
-        set_content_script = f'set content of replyMessage to "{escaped_body}"'
+        success_text = "Reply sent successfully!"
+        set_content_script = "set content of replyMessage to replyBodyText"
     elif effective_mode == "open":
         header_text = "OPENING REPLY FOR REVIEW"
-        # For open, we make the window visible and use System Events keystroke
-        # to type the reply. This preserves Mail.app's native quoted original
-        # (setting content via AppleScript overwrites the async HTML layer).
-        _keystroke_lines = reply_body.split("\n")
-        _keystroke_script = ""
-        for i, line in enumerate(_keystroke_lines):
-            safe_line = escape_applescript(line)
-            _keystroke_script += f'keystroke "{safe_line}"\n                        '
-            if i < len(_keystroke_lines) - 1:
-                _keystroke_script += "keystroke return\n                        "
-        send_or_draft_command = f"""
+        send_or_draft_command = """
                 set visible of replyMessage to true
                 activate
                 delay 1.5
+                set the clipboard to replyBodyText
                 tell application "System Events"
                     tell process "Mail"
-                        {_keystroke_script}
+                        keystroke "v" using command down
                     end tell
-                end tell"""
-        success_text = "✓ Reply opened in Mail for review. Edit and send when ready."
-        set_content_script = "-- content set via keystroke"
-    else:  # draft
+                end tell
+                delay 0.5"""
+        success_text = "Reply opened in Mail for review. Edit and send when ready."
+        set_content_script = "-- content inserted via clipboard paste"
+    else:
         header_text = "SAVING REPLY AS DRAFT"
         send_or_draft_command = "close window 1 saving yes"
-        success_text = "✓ Reply saved as draft!"
-        # For draft, we must manually build the quoted original because
-        # close-window-saving-yes saves the content property literally
-        # and the reply message's content property is initially empty
-        set_content_script = f'''set origContent to content of foundMessage
+        success_text = "Reply saved as draft!"
+        set_content_script = """set origContent to content of foundMessage
                 set origSender to sender of foundMessage
                 set origDate to date received of foundMessage
                 set quotedText to "On " & (origDate as string) & ", " & origSender & " wrote:" & return & return & origContent
-                set content of replyMessage to "{escaped_body}" & return & return & quotedText'''
+                set content of replyMessage to replyBodyText & return & return & quotedText"""
+
+    cleanup_script = f'do shell script "rm -f " & quoted form of "{body_temp_path}"'
 
     script = f'''
     tell application "Mail"
         set outputText to "{header_text}" & return & return
 
         try
+            {read_body_script}
+
             set targetAccount to account "{safe_account}"
             {inbox_mailbox_script("inboxMailbox", "targetAccount")}
             set inboxMessages to every message of inboxMailbox
             set foundMessage to missing value
 
-            -- Find the first matching message
             repeat with aMessage in inboxMessages
                 try
                     set messageSubject to subject of aMessage
@@ -221,27 +366,20 @@ def reply_to_email(
                 set messageSender to sender of foundMessage
                 set messageDate to date received of foundMessage
 
-                -- Create reply
                 {reply_command}
                 delay 0.5
 
-                -- Ensure the reply is from the correct account
                 set emailAddrs to email addresses of targetAccount
                 set senderAddress to item 1 of emailAddrs
                 set sender of replyMessage to senderAddress
 
-                -- Set reply content
                 {set_content_script}
                 delay 0.5
 
-                -- Add CC/BCC recipients
                 {cc_script}
                 {bcc_script}
-
-                -- Add attachments
                 {attachment_script}
 
-                -- Send or save as draft
                 {send_or_draft_command}
 
                 set outputText to outputText & "{success_text}" & return & return
@@ -250,39 +388,47 @@ def reply_to_email(
                 set outputText to outputText & "  From: " & messageSender & return
                 set outputText to outputText & "  Date: " & (messageDate as string) & return & return
                 set outputText to outputText & "Reply body:" & return
-                set outputText to outputText & "  " & "{escaped_body}" & return
+                set outputText to outputText & "  " & replyBodyText & return
     '''
 
     if cc:
-        script += f"""
+        script += f'''
                 set outputText to outputText & "CC: {safe_cc}" & return
-    """
+    '''
 
     if bcc:
-        script += f"""
+        script += f'''
                 set outputText to outputText & "BCC: {safe_bcc}" & return
-    """
+    '''
 
     if attachments:
         script += f'''
                 set outputText to outputText & "Attachments:" & return & "{safe_attachment_info}" & return
     '''
 
-    script += f"""
+    script += f'''
             else
-                set outputText to outputText & "⚠ No email found matching: {safe_subject_keyword}" & return
+                set outputText to outputText & "No email found matching: {safe_subject_keyword}" & return
             end if
 
+            {cleanup_script}
+
         on error errMsg
+            try
+                {cleanup_script}
+            end try
             return "Error: " & errMsg & return & "Please check that the account name is correct and the email exists."
         end try
 
         return outputText
     end tell
-    """
+    '''
 
-    result = run_applescript(script)
-    return result
+    try:
+        return run_applescript(script)
+    finally:
+        if os.path.exists(body_temp_path):
+            os.unlink(body_temp_path)
 
 
 @mcp.tool()
@@ -296,6 +442,7 @@ def compose_email(
     bcc: str | None = None,
     attachments: str | None = None,
     mode: str = "send",
+    body_html: str | None = None,
 ) -> str:
     """
     Compose and send a new email from a specific account.
@@ -304,51 +451,22 @@ def compose_email(
         account: Account name to send from (e.g., "Gmail", "Work", "Personal")
         to: Recipient email address(es), comma-separated for multiple
         subject: Email subject line
-        body: Email body text
+        body: Email body text (plain-text fallback when body_html is used)
         cc: Optional CC recipients, comma-separated for multiple
         bcc: Optional BCC recipients, comma-separated for multiple
         attachments: Optional file paths to attach, comma-separated for multiple (e.g., "/path/to/file1.png,/path/to/file2.pdf")
         mode: Delivery mode — "send" (send immediately, default), "draft" (save silently to Drafts), or "open" (open compose window for review before sending)
+        body_html: Optional HTML email body for rich formatting
 
     Returns:
         Confirmation message with details of the email
     """
+    if server.READ_ONLY:
+        return "Error: Server is running in read-only mode. Sending email is disabled."
 
-    # Escape all user inputs for AppleScript
-    safe_account = escape_applescript(account)
-    escaped_subject = escape_applescript(subject)
-    escaped_body = escape_applescript(body)
+    if mode not in ("send", "draft", "open"):
+        return f"Error: Invalid mode '{mode}'. Use: send, draft, open"
 
-    # Build TO recipients (split comma-separated addresses)
-    to_script = ""
-    to_addresses = [addr.strip() for addr in to.split(",")]
-    for addr in to_addresses:
-        safe_addr = escape_applescript(addr)
-        to_script += f'''
-                make new to recipient at end of to recipients with properties {{address:"{safe_addr}"}}
-        '''
-
-    # Build CC recipients if provided
-    cc_script = ""
-    if cc:
-        cc_addresses = [addr.strip() for addr in cc.split(",")]
-        for addr in cc_addresses:
-            safe_addr = escape_applescript(addr)
-            cc_script += f'''
-                make new cc recipient at end of cc recipients with properties {{address:"{safe_addr}"}}
-            '''
-
-    # Build BCC recipients if provided
-    bcc_script = ""
-    if bcc:
-        bcc_addresses = [addr.strip() for addr in bcc.split(",")]
-        for addr in bcc_addresses:
-            safe_addr = escape_applescript(addr)
-            bcc_script += f'''
-                make new bcc recipient at end of bcc recipients with properties {{address:"{safe_addr}"}}
-            '''
-
-    # Build attachment script if provided
     attachment_script = ""
     attachment_info = ""
     if attachments:
@@ -364,9 +482,44 @@ def compose_email(
             '''
             attachment_info += f"  {path}\n"
 
-    # Validate mode
-    if mode not in ("send", "draft", "open"):
-        return f"Error: Invalid mode '{mode}'. Use: send, draft, open"
+    if body_html:
+        return _send_html_email(
+            account=account,
+            to=to,
+            subject=subject,
+            body_html=body_html,
+            cc=cc,
+            bcc=bcc,
+            attachments_script=attachment_script,
+            mode=mode,
+        )
+
+    safe_account = escape_applescript(account)
+    escaped_subject = escape_applescript(subject)
+    escaped_body = escape_applescript(body)
+
+    to_script = ""
+    for addr in [addr.strip() for addr in to.split(",")]:
+        safe_addr = escape_applescript(addr)
+        to_script += f'''
+                make new to recipient at end of to recipients with properties {{address:"{safe_addr}"}}
+        '''
+
+    cc_script = ""
+    if cc:
+        for addr in [addr.strip() for addr in cc.split(",")]:
+            safe_addr = escape_applescript(addr)
+            cc_script += f'''
+                make new cc recipient at end of cc recipients with properties {{address:"{safe_addr}"}}
+            '''
+
+    bcc_script = ""
+    if bcc:
+        for addr in [addr.strip() for addr in bcc.split(",")]:
+            safe_addr = escape_applescript(addr)
+            bcc_script += f'''
+                make new bcc recipient at end of bcc recipients with properties {{address:"{safe_addr}"}}
+            '''
 
     safe_to = escape_applescript(to)
     safe_cc = escape_applescript(cc) if cc else ""
@@ -482,6 +635,9 @@ def forward_email(
     Returns:
         Confirmation message with details of forwarded email
     """
+
+    if server.READ_ONLY:
+        return "Error: Server is running in read-only mode. Forwarding is disabled."
 
     # Escape all user inputs for AppleScript
     safe_account = escape_applescript(account)
@@ -755,6 +911,9 @@ def manage_drafts(
         '''
 
     elif action == "send":
+        if server.READ_ONLY:
+            return "Error: Server is running in read-only mode. Sending drafts is disabled."
+
         if not draft_subject:
             return "Error: 'draft_subject' is required for sending drafts"
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Apple Mail MCP Server - Entry point (thin wrapper)."""
+"""Apple Mail MCP Server - script entry point."""
 
-from apple_mail_mcp import mcp
+import apple_mail_mcp.bootstrap as bootstrap
 
 if __name__ == "__main__":
-    mcp.run()
+    bootstrap.main()

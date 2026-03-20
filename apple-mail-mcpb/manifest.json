@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "Apple Mail MCP",
   "version": "2.1.0",
-  "description": "Natural language interface for Apple Mail with 37 tools — email search, composition, bulk operations, smart inbox analytics, folder management, IMAP sorting, and security-hardened destructive operations. Includes Email Management Expert Skill and Interactive UI Dashboard.",
+  "description": "Natural language interface for Apple Mail with 37 tools — email search, HTML/plain-text composition, bulk operations, smart inbox analytics, folder management, IMAP sorting, and optional read-only mode. Includes Email Management Expert Skill and Interactive UI Dashboard.",
   "author": {
     "name": "isityael"
   },
@@ -20,6 +20,13 @@
       "description": "Your personal email preferences that will be provided to the AI assistant when using email tools (e.g., 'Default to BCG account, show max 50 emails, prefer Archive folder')",
       "required": false,
       "default": ""
+    },
+    "read_only": {
+      "type": "boolean",
+      "title": "Read-Only Mode",
+      "description": "Disable tools that send email. Draft listing, creation, opening, and deletion remain available, but sending is blocked.",
+      "required": false,
+      "default": false
     }
   },
   "server": {
@@ -31,7 +38,8 @@
         "${__dirname}/start_mcp.sh"
       ],
       "env": {
-        "USER_EMAIL_PREFERENCES": "${user_config.user_preferences}"
+        "USER_EMAIL_PREFERENCES": "${user_config.user_preferences}",
+        "APPLE_MAIL_MCP_READ_ONLY": "${user_config.read_only}"
       }
     }
   },
@@ -70,11 +78,11 @@
     },
     {
       "name": "reply_to_email",
-      "description": "Reply to emails matching a subject keyword. Send reply or save as draft with custom body and option to reply to all recipients. Supports CC/BCC."
+      "description": "Reply to emails matching a subject keyword. Send reply or save as draft with custom body and option to reply to all recipients. Supports CC/BCC and attachments."
     },
     {
       "name": "compose_email",
-      "description": "Compose and send a new email from a specific account. Supports TO, CC, and BCC recipients with custom subject and body."
+      "description": "Compose and send a new email from a specific account. Supports TO, CC, BCC, attachments, open/draft modes, and optional HTML body content."
     },
     {
       "name": "forward_email",
@@ -130,7 +138,7 @@
     },
     {
       "name": "manage_drafts",
-      "description": "Complete draft management: list, create, send, and delete drafts. Supports full composition parameters (TO, CC, BCC)."
+      "description": "Complete draft management: list, create, send, open, and delete drafts. Supports full composition parameters (TO, CC, BCC)."
     },
     {
       "name": "create_mailbox",

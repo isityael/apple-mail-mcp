@@ -31,5 +31,11 @@ log_error "Syncing dependencies..."
 cd "${SCRIPT_DIR}"
 "${UV_BIN}" sync --quiet 2>&1 | while read line; do log_error "$line"; done
 
+EXTRA_ARGS=()
+if [ "${APPLE_MAIL_MCP_READ_ONLY}" = "true" ]; then
+    log_error "Starting in read-only mode"
+    EXTRA_ARGS+=(--read-only)
+fi
+
 # Run the Python MCP server
-exec "${UV_BIN}" run python "${PYTHON_SCRIPT}" "$@"
+exec "${UV_BIN}" run python "${PYTHON_SCRIPT}" "${EXTRA_ARGS[@]}" "$@"

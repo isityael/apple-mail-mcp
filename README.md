@@ -1,7 +1,7 @@
 # Apple Mail MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
 [![GitHub stars](https://img.shields.io/github/stars/patrickfreyer/apple-mail-mcp?style=social)](https://github.com/patrickfreyer/apple-mail-mcp/stargazers)
 
@@ -13,13 +13,12 @@ An MCP server that gives AI assistants full access to Apple Mail -- read, search
 
 ## Quick Start
 
-**Prerequisites:** macOS with Apple Mail configured, Python 3.7+
+**Prerequisites:** macOS with Apple Mail configured, Python 3.13+, `uv`
 
 ```bash
-git clone https://github.com/patrickfreyer/apple-mail-mcp.git
+git clone https://github.com/isityael/apple-mail-mcp.git
 cd apple-mail-mcp
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+uv sync
 ```
 
 Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
@@ -28,7 +27,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 {
   "mcpServers": {
     "apple-mail": {
-      "command": "/path/to/apple-mail-mcp/venv/bin/python3",
+      "command": "/path/to/apple-mail-mcp/.venv/bin/python3",
       "args": ["/path/to/apple-mail-mcp/apple_mail_mcp.py"]
     }
   }
@@ -37,9 +36,9 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 Restart Claude Desktop and grant Mail.app permissions when prompted.
 
-> **Tip:** An `.mcpb` bundle is also available on the [Releases](https://github.com/patrickfreyer/apple-mail-mcp/releases) page for one-click install in Claude Desktop.
+> **Tip:** An `.mcpb` bundle is also available on the [Releases](https://github.com/isityael/apple-mail-mcp/releases) page for one-click install in Claude Desktop.
 
-## Tools (26)
+## Tools (37)
 
 ### Reading & Search
 | Tool | Description |
@@ -109,6 +108,27 @@ Set the `USER_EMAIL_PREFERENCES` environment variable to give the assistant cont
 
 For `.mcpb` installs, configure this in Claude Desktop under **Developer > MCP Servers > Apple Mail MCP**.
 
+### Read-Only Mode
+
+Use `--read-only` to disable send-capable tools while keeping inbox, search, organization, and draft-management workflows available. In read-only mode, `compose_email`, `reply_to_email`, and `forward_email` are hidden, and draft sending is blocked.
+
+```json
+{
+  "mcpServers": {
+    "apple-mail": {
+      "command": "/path/to/venv/bin/python3",
+      "args": ["/path/to/apple_mail_mcp.py", "--read-only"]
+    }
+  }
+}
+```
+
+For `.mcpb` installs, the same behavior is available through the **Read-Only Mode** package setting.
+
+### HTML Compose
+
+`compose_email` now supports an optional `body_html` parameter for rich email formatting. If `body_html` is omitted, the existing plain-text behavior is unchanged.
+
 ### Safety Limits
 
 Batch operations have conservative defaults to prevent accidental bulk actions:
@@ -127,6 +147,7 @@ Override via function parameters when needed.
 Show me an overview of my inbox
 Search for emails about "project update" in my Gmail
 Reply to the email about "Domain name" with "Thanks for the update!"
+Draft an HTML email with a bold heading and a link to the project tracker
 Move emails with "invoice" in the subject to my Archive folder
 Show me email statistics for the last 30 days
 ```
@@ -144,7 +165,7 @@ See [skill-email-management/README.md](skill-email-management/README.md) for det
 ## Requirements
 
 - macOS with Apple Mail configured
-- Python 3.7+
+- Python 3.13+
 - `fastmcp` (+ optional `mcp-ui-server` for dashboard)
 - Claude Desktop or any MCP-compatible client
 - Mail.app permissions: Automation + Mail Data Access (grant in **System Settings > Privacy & Security > Automation**)
@@ -162,8 +183,11 @@ See [skill-email-management/README.md](skill-email-management/README.md) for det
 
 ```
 apple-mail-mcp/
-├── apple_mail_mcp.py          # Main MCP server (26 tools)
-├── requirements.txt           # Python dependencies
+├── apple_mail_mcp.py          # Script entrypoint
+├── start_mcp.sh               # Bundle/runtime launcher
+├── pyproject.toml             # Python project metadata
+├── uv.lock                    # Locked dependencies
+├── apple_mail_mcp/            # MCP package and tool modules
 ├── apple-mail-mcpb/           # MCP Bundle build files
 ├── skill-email-management/    # Email Management Expert Skill
 ├── CHANGELOG.md
