@@ -19,7 +19,7 @@ uv run python apple_mail_mcp.py
 ./start_mcp.sh
 ```
 
-Testing is done manually via Claude Desktop or MCP clients. CI runs on both GitHub Actions (`.github/workflows/ci.yml`) and Woodpecker CI (`.woodpecker/*.yml`): lint, format check, syntax/import validation, mcpb build, and release on tags. Ruff is configured for linting and formatting:
+Testing is done manually via Claude Desktop or MCP clients. CI runs via Woodpecker (`.woodpecker.yml`): lint, format check, syntax/import validation, mcpb build, GitHub release-on-tag, and Homebrew tap updates. Ruff is configured for linting and formatting:
 
 ```bash
 uv run ruff check .          # Lint
