@@ -40,6 +40,7 @@ steps:
       GH_TOKEN:
         from_secret: github_token
     commands:
+      - apt-get update -qq && apt-get install -y -q git
       - git config user.name "woodpecker[bot]"
       - git config user.email "woodpecker@m0sh1.cc"
       - git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/isityael/apple-mail-mcp.git"
