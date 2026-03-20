@@ -27,7 +27,7 @@ steps:
         PYEOF
 
   - name: release
-    image: harbor.m0sh1.cc/apps/bun-git:1.3.11-debian13-dev
+    image: harbor.m0sh1.cc/apps/bun-git:1.3.11-debian13-dev@sha256:e76b40f0846ebb85ef9e8710377402c00d0ee05bbf0ce4fd72a53d5c94201b92
     depends_on:
       - lint
       - check
