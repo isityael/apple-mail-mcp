@@ -6,14 +6,14 @@ when:
 
 steps:
   - name: lint
-    image: dhi.io/uv:0.10.11-debian13-dev@sha256:ffee3a3d042dca591b928ed5fa7b200ba6fa30f3f46c166665ce0c97198bf0ef
+    image: dhi.io/uv:0.10.12-debian13-dev@sha256:a4c2324a43507ab837772760ef2a76a38703d10437272a85e65328903f4b176e
     commands:
       - uv sync --frozen
       - uv run ruff check .
       - uv run ruff format --check .
 
   - name: check
-    image: dhi.io/uv:0.10.11-debian13-dev@sha256:ffee3a3d042dca591b928ed5fa7b200ba6fa30f3f46c166665ce0c97198bf0ef
+    image: dhi.io/uv:0.10.12-debian13-dev@sha256:a4c2324a43507ab837772760ef2a76a38703d10437272a85e65328903f4b176e
     commands:
       - uv sync --frozen
       - uv run python -c "import apple_mail_mcp"
