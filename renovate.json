@@ -4,16 +4,35 @@
     "config:best-practices",
     ":preserveSemverRanges"
   ],
-  "platformAutomerge": false,
-  "dependencyDashboard": true,
-  "timezone": "Europe/Berlin",
-  "schedule": [
-    "at any time"
+  "enabledManagers": [
+    "pep621",
+    "npm",
+    "woodpecker",
+    "mise"
   ],
-  "prHourlyLimit": 5,
-  "prConcurrentLimit": 3,
-  "labels": [
-    "dependencies"
-  ],
-  "pinDigests": false
+  "packageRules": [
+    {
+      "matchManagers": ["pep621"],
+      "addLabels": ["python"]
+    },
+    {
+      "matchManagers": ["npm"],
+      "addLabels": ["npm"]
+    },
+    {
+      "matchManagers": ["woodpecker"],
+      "addLabels": ["docker"]
+    },
+    {
+      "description": "Group semantic-release tooling",
+      "matchPackageNames": ["/semantic-release/"],
+      "groupName": "semantic-release"
+    },
+    {
+      "description": "Auto-merge patch and minor Python dependency updates",
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true
+    }
+  ]
 }
