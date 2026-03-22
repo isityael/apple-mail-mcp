@@ -27,7 +27,7 @@ steps:
         PYEOF
 
   - name: release
-    image: harbor.m0sh1.cc/apps/bun-git:1.3.11-debian13-dev@sha256:6ab953854eb2ff193acc97eb96669c8085fd0a567da9c41b4a1f63de65eac4b0
+    image: dhi.io/node:25.8.1-alpine3.23-dev
     depends_on:
       - lint
       - check
@@ -40,12 +40,13 @@ steps:
       GH_TOKEN:
         from_secret: github_token
     commands:
+      - apk add --no-cache git
       - git config user.name "woodpecker[bot]"
       - git config user.email "woodpecker@m0sh1.cc"
       - git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/isityael/apple-mail-mcp.git"
       - git fetch --tags origin
-      - bun install --frozen-lockfile
-      - bunx semantic-release
+      - npm ci
+      - npx semantic-release
 
   - name: build-mcpb
     image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
