@@ -27,7 +27,7 @@ steps:
         PYEOF
 
   - name: release
-    image: dhi.io/node:25.8.1-alpine3.23-dev
+    image: dhi.io/node:25.8.1-alpine3.23-dev@sha256:cd633ec63cba04997c43da60a0b98402bd48b7362b47c2adb7c2edc5eff5bd8e
     depends_on:
       - lint
       - check
