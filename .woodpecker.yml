@@ -86,7 +86,7 @@ steps:
       GITHUB_TOKEN:
         from_secret: github_token
     commands:
-      - apk add --no-cache git gh
+      - apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/v3.23/community git gh
       - export GH_TOKEN="${GITHUB_TOKEN}"
       - MCPB_FILE="apple-mail-mcp-${CI_COMMIT_TAG}.mcpb"
       - SHA_FILE="${MCPB_FILE}.sha256"
