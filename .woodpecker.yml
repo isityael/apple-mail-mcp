@@ -8,6 +8,7 @@ steps:
   - name: lint
     image: dhi.io/uv:0.11.0-debian13-dev@sha256:ca8f7b07f3498c280ee7047941bc26c4b90ed64d40e6627bc0b69d561d8d7c94
     commands:
+      - rm -rf .venv
       - uv sync --frozen
       - uv run ruff check .
       - uv run ruff format --check .
@@ -15,6 +16,7 @@ steps:
   - name: check
     image: dhi.io/uv:0.11.0-debian13-dev@sha256:ca8f7b07f3498c280ee7047941bc26c4b90ed64d40e6627bc0b69d561d8d7c94
     commands:
+      - rm -rf .venv
       - uv sync --frozen
       - uv run python -c "import apple_mail_mcp"
       - uv run python tests/test_runtime_features.py
