@@ -4,6 +4,7 @@
     "config:best-practices",
     ":preserveSemverRanges"
   ],
+  "pinDigests": false,
   "enabledManagers": [
     "pep621",
     "npm",
