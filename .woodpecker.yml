@@ -87,14 +87,14 @@ steps:
         from_secret: github_token
     commands:
       - apk add --no-cache -X https://dl-cdn.alpinelinux.org/alpine/v3.23/community git github-cli
-      - export GH_TOKEN="${GITHUB_TOKEN}"
-      - MCPB_FILE="apple-mail-mcp-${CI_COMMIT_TAG}.mcpb"
-      - SHA_FILE="${MCPB_FILE}.sha256"
       - |
-        for file in "${MCPB_FILE}" "${SHA_FILE}"; do
-          test -f "${file}" || { echo "Missing: ${file}"; exit 1; }
+        export GH_TOKEN="${GITHUB_TOKEN}"
+        MCPB_FILE="apple-mail-mcp-${CI_COMMIT_TAG}.mcpb"
+        SHA_FILE="${MCPB_FILE}.sha256"
+        for file in "$MCPB_FILE" "$SHA_FILE"; do
+          test -f "$file" || { echo "Missing: $file"; exit 1; }
         done
-      - gh release upload "${CI_COMMIT_TAG}" "${MCPB_FILE}" "${SHA_FILE}" --repo "isityael/apple-mail-mcp" --clobber
+        gh release upload "${CI_COMMIT_TAG}" "$MCPB_FILE" "$SHA_FILE" --repo "isityael/apple-mail-mcp" --clobber
 
   - name: update-homebrew
     image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
