@@ -91,7 +91,9 @@ steps:
         export GH_TOKEN="${GITHUB_TOKEN}"
         test -f "apple-mail-mcp-${CI_COMMIT_TAG}.mcpb" || { echo "Missing: apple-mail-mcp-${CI_COMMIT_TAG}.mcpb"; exit 1; }
         test -f "apple-mail-mcp-${CI_COMMIT_TAG}.mcpb.sha256" || { echo "Missing: apple-mail-mcp-${CI_COMMIT_TAG}.mcpb.sha256"; exit 1; }
-        gh release upload "${CI_COMMIT_TAG}" "apple-mail-mcp-${CI_COMMIT_TAG}.mcpb" "apple-mail-mcp-${CI_COMMIT_TAG}.mcpb.sha256" --repo "isityael/apple-mail-mcp" --clobber
+        gh release delete-asset "${CI_COMMIT_TAG}" "apple-mail-mcp-${CI_COMMIT_TAG}.mcpb" --repo "isityael/apple-mail-mcp" -y 2>/dev/null || true
+        gh release delete-asset "${CI_COMMIT_TAG}" "apple-mail-mcp-${CI_COMMIT_TAG}.mcpb.sha256" --repo "isityael/apple-mail-mcp" -y 2>/dev/null || true
+        gh release upload "${CI_COMMIT_TAG}" "apple-mail-mcp-${CI_COMMIT_TAG}.mcpb" "apple-mail-mcp-${CI_COMMIT_TAG}.mcpb.sha256" --repo "isityael/apple-mail-mcp"
 
   - name: update-homebrew
     image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212
