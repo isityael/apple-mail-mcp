@@ -1,10 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
+    "github>isityael/infra//.github/renovate/base.json",
     "config:best-practices",
     ":preserveSemverRanges"
   ],
-  "pinDigests": false,
   "enabledManagers": [
     "pep621",
     "npm",
