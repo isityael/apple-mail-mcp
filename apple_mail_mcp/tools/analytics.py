@@ -418,7 +418,7 @@ def export_emails(
 
     # Path validation: resolve to absolute path and enforce safety constraints
     resolved_path = os.path.realpath(save_dir)
-    home_dir = os.path.expanduser('~')
+    home_dir = os.path.expanduser("~")
 
     # Must be under the user's home directory
     if not resolved_path.startswith(home_dir + os.sep) and resolved_path != home_dir:
@@ -426,14 +426,14 @@ def export_emails(
 
     # Block sensitive directories
     sensitive_dirs = [
-        os.path.join(home_dir, '.ssh'),
-        os.path.join(home_dir, '.gnupg'),
-        os.path.join(home_dir, '.config'),
-        os.path.join(home_dir, '.aws'),
-        os.path.join(home_dir, '.claude'),
-        os.path.join(home_dir, 'Library', 'LaunchAgents'),
-        os.path.join(home_dir, 'Library', 'LaunchDaemons'),
-        os.path.join(home_dir, 'Library', 'Keychains'),
+        os.path.join(home_dir, ".ssh"),
+        os.path.join(home_dir, ".gnupg"),
+        os.path.join(home_dir, ".config"),
+        os.path.join(home_dir, ".aws"),
+        os.path.join(home_dir, ".claude"),
+        os.path.join(home_dir, "Library", "LaunchAgents"),
+        os.path.join(home_dir, "Library", "LaunchDaemons"),
+        os.path.join(home_dir, "Library", "Keychains"),
     ]
     for sensitive_dir in sensitive_dirs:
         if resolved_path.startswith(sensitive_dir + os.sep) or resolved_path == sensitive_dir:

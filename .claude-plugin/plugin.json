@@ -1,0 +1,17 @@
+{
+  "name": "apple-mail",
+  "description": "IMAP-first email management for Apple Mail — search, compose, triage, organise, and analyse email with 37 MCP tools, IMAP acceleration, cross-account moves, and an expert email management skill",
+  "version": "2.5.0",
+  "author": {
+    "name": "isityael"
+  },
+  "commands": [
+    "./commands/"
+  ],
+  "mcpServers": {
+    "apple-mail": {
+      "command": "/bin/bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/start_mcp.sh"]
+    }
+  }
+}
