@@ -95,10 +95,9 @@ steps:
         test -f "$MCPB" || { echo "Missing: $MCPB"; exit 1; }
         test -f "$MCPB.sha256" || { echo "Missing: $MCPB.sha256"; exit 1; }
         REPO="isityael/apple-mail-mcp"
-        # semantic-release creates the release on push; delete and recreate with assets
-        NOTES=$(gh release view "${CI_COMMIT_TAG}" --repo "$REPO" --json body -q .body 2>/dev/null || echo "Release ${CI_COMMIT_TAG}")
-        gh release delete "${CI_COMMIT_TAG}" --repo "$REPO" --yes 2>/dev/null || true
-        gh release create "${CI_COMMIT_TAG}" "$MCPB" "$MCPB.sha256" --repo "$REPO" --title "${CI_COMMIT_TAG}" --notes "$NOTES"
+        # semantic-release creates a draft release; upload assets then publish
+        gh release upload "${CI_COMMIT_TAG}" "$MCPB" "$MCPB.sha256" --repo "$REPO" --clobber
+        gh release edit "${CI_COMMIT_TAG}" --repo "$REPO" --draft=false
 
   - name: update-homebrew
     image: dhi.io/alpine-base:3.23-dev@sha256:fb5ea621f50f24533355a8c58ca68aa9b5b5cd0af080feeb7f66ba1611069212

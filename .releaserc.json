@@ -8,7 +8,8 @@
       "@semantic-release/github",
       {
         "successComment": false,
-        "failComment": false
+        "failComment": false,
+        "draftRelease": true
       }
     ]
   ]
