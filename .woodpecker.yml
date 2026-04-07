@@ -109,20 +109,40 @@ steps:
       GITHUB_TOKEN:
         from_secret: github_token
     commands:
-      - apk add --no-cache git curl
-      - VERSION="${CI_COMMIT_TAG#v}"
-      - TARBALL_URL="https://github.com/isityael/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz"
-      - echo "Fetching SHA256 for ${TARBALL_URL}..."
-      - SHA256=$(curl -sL "$TARBALL_URL" | sha256sum | cut -d' ' -f1)
-      - echo "Version=${VERSION} SHA256=${SHA256}"
-      - git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/isityael/tap.git" /tmp/tap
-      - cd /tmp/tap
-      - sed -i "s|url \"https://github.com/isityael/apple-mail-mcp/archive/refs/tags/v.*\\.tar\\.gz\"|url \"https://github.com/isityael/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz\"|" Formula/apple-mail-mcp.rb
-      - sed -i "s|sha256 \"[a-f0-9]\\{64\\}\"|sha256 \"${SHA256}\"|" Formula/apple-mail-mcp.rb
-      - git config user.name "Woodpecker CI"
-      - git config user.email "ci@m0sh1.cc"
-      - git add Formula/apple-mail-mcp.rb
-      - git diff --cached --quiet && echo "No changes" && exit 0
+      - apk add --no-cache -X https://dl-cdn.alpinelinux.org/alpine/v3.23/community curl github-cli jq
       - |
-        git commit -m "chore(apple-mail-mcp) bump to ${VERSION}"
-        git push
+        export GH_TOKEN="${GITHUB_TOKEN}"
+        VERSION="${CI_COMMIT_TAG#v}"
+        TARBALL_URL="https://github.com/isityael/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz"
+        echo "Fetching SHA256 for ${TARBALL_URL}..."
+        SHA256=$(curl -sL "$TARBALL_URL" | sha256sum | cut -d' ' -f1)
+        echo "Version=${VERSION} SHA256=${SHA256}"
+
+        TAP_REPO="isityael/tap"
+        FILE_PATH="Formula/apple-mail-mcp.rb"
+
+        # Fetch current file content and SHA
+        FILE_DATA=$(gh api "repos/${TAP_REPO}/contents/${FILE_PATH}" --jq '{sha: .sha, content: .content}')
+        FILE_SHA=$(echo "$FILE_DATA" | jq -r .sha)
+        CONTENT=$(echo "$FILE_DATA" | jq -r .content | base64 -d)
+
+        # Update URL and SHA256 in formula
+        UPDATED=$(echo "$CONTENT" \
+          | sed "s|url \"https://github.com/isityael/apple-mail-mcp/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/isityael/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz\"|" \
+          | sed "s|sha256 \"[a-f0-9]\{64\}\"|sha256 \"${SHA256}\"|")
+
+        # Skip if no changes
+        if [ "$CONTENT" = "$UPDATED" ]; then
+          echo "No changes needed"
+          exit 0
+        fi
+
+        # Commit via GitHub API
+        ENCODED=$(echo "$UPDATED" | base64 | tr -d '\n')
+        gh api "repos/${TAP_REPO}/contents/${FILE_PATH}" \
+          --method PUT \
+          --field message="chore(apple-mail-mcp): bump to ${VERSION}" \
+          --field content="$ENCODED" \
+          --field sha="$FILE_SHA" \
+          --field committer='{"name":"Woodpecker CI","email":"ci@m0sh1.cc"}'
+        echo "Updated ${FILE_PATH} to ${VERSION}"
