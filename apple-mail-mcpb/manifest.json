@@ -1,8 +1,8 @@
 {
   "dxt_version": "0.1",
   "name": "Apple Mail MCP",
-  "version": "2.1.0",
-  "description": "Natural language interface for Apple Mail with 37 tools — email search, HTML/plain-text composition, bulk operations, smart inbox analytics, folder management, IMAP sorting, and optional read-only mode. Includes Email Management Expert Skill and Interactive UI Dashboard.",
+  "version": "2.6.0",
+  "description": "IMAP-first email management for Apple Mail with 37 tools — IMAP-accelerated search with recipient filtering, cross-account moves, HTML/plain-text composition, bulk operations, smart inbox analytics, folder management, IMAP sorting, and optional read-only mode.",
   "author": {
     "name": "isityael"
   },
