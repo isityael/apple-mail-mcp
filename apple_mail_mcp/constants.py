@@ -36,6 +36,8 @@ SKIP_FOLDERS = [
     "Drafts",
     "Spam",
     "Deleted Messages",
+    "All Mail",
+    "All Messages",
 ]
 
 # Thread subject prefixes to strip when matching threads

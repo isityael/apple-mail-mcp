@@ -1,11 +1,166 @@
 """Search tools: finding and filtering emails."""
 
+import contextlib
 import json
+import logging
 from typing import Any
 
+from apple_mail_mcp import imap as imap_backend
 from apple_mail_mcp.constants import SKIP_FOLDERS
 from apple_mail_mcp.core import LOWERCASE_HANDLER, escape_applescript, inject_preferences, run_applescript
 from apple_mail_mcp.server import mcp
+
+_log = logging.getLogger("apple-mail-mcp.search")
+
+
+# ---------------------------------------------------------------------------
+# IMAP fast-path helper
+# ---------------------------------------------------------------------------
+
+
+def _try_imap_search(
+    account: str | None,
+    mailbox: str = "INBOX",
+    *,
+    to: str | None = None,
+    cc: str | None = None,
+    subject: str | None = None,
+    sender: str | None = None,
+    body: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    is_read: bool | None = None,
+    is_flagged: bool | None = None,
+    max_results: int = 50,
+    offset: int = 0,
+    include_content: bool = False,
+) -> list[dict[str, str]] | None:
+    """Try an IMAP search for *account*.  Returns ``None`` when IMAP is not
+    configured (caller should fall back to AppleScript).
+
+    On IMAP errors the exception is logged and ``None`` is returned so the
+    caller transparently falls back.
+    """
+    if account is None:
+        return None
+    if not imap_backend.has_imap_config(account):
+        return None
+
+    cfg = imap_backend.get_account_config(account)
+    if not cfg or not cfg.get("user") or not cfg.get("password"):
+        return None
+
+    try:
+        conn = imap_backend.connect(cfg["host"], cfg["port"], cfg["user"], cfg["password"])
+    except Exception as exc:
+        _log.warning("IMAP connect failed for %s: %s", account, exc)
+        return None
+
+    try:
+        # Resolve and select mailbox
+        existing = imap_backend.list_folders(conn)
+        skip = {f.lower() for f in SKIP_FOLDERS}
+
+        if mailbox == "All":
+            folders = [f for f in existing if f.lower() not in skip]
+        else:
+            resolved = imap_backend.resolve_folder(mailbox, existing)
+            folders = [resolved]
+
+        # Map is_read to unseen kwarg (inverted logic)
+        unseen: bool | None = None
+        if is_read is True:
+            unseen = False  # SEEN
+        elif is_read is False:
+            unseen = True  # UNSEEN
+
+        criteria = imap_backend.build_imap_search_criteria(
+            to=to,
+            cc=cc,
+            from_addr=sender,
+            subject=subject,
+            body=body,
+            since=date_from,
+            before=date_to,
+            unseen=unseen,
+            flagged=is_flagged,
+        )
+
+        all_results: list[dict[str, str]] = []
+
+        for folder in folders:
+            try:
+                conn.select(f'"{folder}"', readonly=True)
+            except Exception:
+                continue
+
+            uids = imap_backend.imap_search(conn, criteria)
+            if not uids:
+                continue
+
+            # Apply offset + limit
+            end = offset + max_results - len(all_results)
+            selected = uids[offset:end] if offset else uids[: max_results - len(all_results)]
+            if not selected:
+                continue
+
+            headers = imap_backend.batch_fetch_headers(conn, selected)
+            for hdr in headers:
+                all_results.append(
+                    {
+                        "subject": str(hdr.get("subject", "")),
+                        "sender": str(hdr.get("from", "")),
+                        "date": str(hdr.get("date", "")),
+                        "to": str(hdr.get("to", "")),
+                        "cc": str(hdr.get("cc", "")),
+                        "account": account,
+                        "mailbox": folder,
+                    }
+                )
+                if len(all_results) >= max_results:
+                    break
+
+            if len(all_results) >= max_results:
+                break
+
+        return all_results
+
+    except Exception as exc:
+        _log.warning("IMAP search failed for %s: %s", account, exc)
+        return None
+    finally:
+        with contextlib.suppress(Exception):
+            conn.logout()
+
+
+def _format_imap_results(
+    results: list[dict[str, str]],
+    output_format: str = "text",
+    title: str = "SEARCH RESULTS",
+) -> str:
+    """Format IMAP search results as text or JSON."""
+    if output_format == "json":
+        return json.dumps(results, indent=2)
+
+    if not results:
+        return f"{title}\n\nNo emails found."
+
+    lines = [title, ""]
+    for r in results:
+        lines.append(f"\u2709 {r.get('subject', '(no subject)')}")
+        lines.append(f"   From: {r.get('sender', '')}")
+        if r.get("to"):
+            lines.append(f"   To: {r['to']}")
+        lines.append(f"   Date: {r.get('date', '')}")
+        lines.append(f"   Account: {r.get('account', '')}")
+        if r.get("mailbox"):
+            lines.append(f"   Mailbox: {r['mailbox']}")
+        lines.append("")
+
+    lines.append("=" * 40)
+    lines.append(f"FOUND: {len(results)} email(s)")
+    lines.append("=" * 40)
+    return "\n".join(lines)
 
 
 def _build_native_whose_clause(
@@ -76,37 +231,67 @@ def get_email_with_content(
     Returns:
         Detailed email information including content preview
     """
+    # --- IMAP fast path ---
+    imap_results = _try_imap_search(
+        account,
+        mailbox,
+        subject=subject_keyword,
+        max_results=max_results,
+    )
+    if imap_results is not None:
+        return _format_imap_results(
+            imap_results, output_format="text", title=f"SEARCH RESULTS FOR: {subject_keyword} (IMAP)"
+        )
 
+    # --- AppleScript fallback ---
     # Escape user inputs for AppleScript
     escaped_keyword = escape_applescript(subject_keyword)
     escaped_account = escape_applescript(account)
     escaped_mailbox = escape_applescript(mailbox)
 
+    # Build skip-folders condition for "All" mailbox
+    from apple_mail_mcp.core import skip_folders_condition
+
+    skip_cond = skip_folders_condition("mailboxName")
+
     # Build mailbox selection logic
     if mailbox == "All":
-        mailbox_script = """
+        mailbox_script = f"""
             set allMailboxes to every mailbox of targetAccount
-            set searchMailboxes to allMailboxes
+            repeat with currentMailbox in allMailboxes
+                try
+                    set mailboxName to name of currentMailbox
+                    if {skip_cond} then
+                        set searchMailboxes to {{currentMailbox}}
+        """
+        mailbox_end = f"""
+                    end if
+                end try
+                if resultCount >= {max_results} then exit repeat
+            end repeat
         """
         search_location = "all mailboxes"
     else:
         mailbox_script = f'''
             try
-                set searchMailbox to mailbox "{escaped_mailbox}" of targetAccount
+                set currentMailbox to mailbox "{escaped_mailbox}" of targetAccount
             on error
                 if "{escaped_mailbox}" is "INBOX" then
-                    set searchMailbox to mailbox "Inbox" of targetAccount
+                    set currentMailbox to mailbox "Inbox" of targetAccount
                 else
                     error "Mailbox not found: {escaped_mailbox}"
                 end if
             end try
-            set searchMailboxes to {{searchMailbox}}
+            set mailboxName to name of currentMailbox
+            if true then
+                set searchMailboxes to {{currentMailbox}}
         '''
+        mailbox_end = """
+            end if
+        """
         search_location = mailbox
 
     script = f'''
-    {LOWERCASE_HANDLER}
-
     tell application "Mail"
         set outputText to "SEARCH RESULTS FOR: {escaped_keyword}" & return
         set outputText to outputText & "Searching in: {search_location}" & return & return
@@ -116,64 +301,56 @@ def get_email_with_content(
             set targetAccount to account "{escaped_account}"
             {mailbox_script}
 
-            repeat with currentMailbox in searchMailboxes
-                set mailboxMessages to every message of currentMailbox
-                set mailboxName to name of currentMailbox
+                        -- Use whose clause for fast indexed filtering
+                        set matchedMessages to (every message of currentMailbox whose subject contains "{escaped_keyword}")
 
-                repeat with aMessage in mailboxMessages
-                    if resultCount >= {max_results} then exit repeat
+                        repeat with aMessage in matchedMessages
+                            if resultCount >= {max_results} then exit repeat
 
-                    try
-                        set messageSubject to subject of aMessage
-
-                        -- Convert to lowercase for case-insensitive matching
-                        set lowerSubject to my lowercase(messageSubject)
-                        set lowerKeyword to my lowercase("{escaped_keyword}")
-
-                        -- Check if subject contains keyword (case insensitive)
-                        if lowerSubject contains lowerKeyword then
-                            set messageSender to sender of aMessage
-                            set messageDate to date received of aMessage
-                            set messageRead to read status of aMessage
-
-                            if messageRead then
-                                set readIndicator to "\u2713"
-                            else
-                                set readIndicator to "\u2709"
-                            end if
-
-                            set outputText to outputText & readIndicator & " " & messageSubject & return
-                            set outputText to outputText & "   From: " & messageSender & return
-                            set outputText to outputText & "   Date: " & (messageDate as string) & return
-                            set outputText to outputText & "   Mailbox: " & mailboxName & return
-
-                            -- Get content preview
                             try
-                                set msgContent to content of aMessage
-                                set AppleScript's text item delimiters to {{return, linefeed}}
-                                set contentParts to text items of msgContent
-                                set AppleScript's text item delimiters to " "
-                                set cleanText to contentParts as string
-                                set AppleScript's text item delimiters to ""
+                                set messageSubject to subject of aMessage
+                                set messageSender to sender of aMessage
+                                set messageDate to date received of aMessage
+                                set messageRead to read status of aMessage
 
-                                -- Handle content length limit (0 = unlimited)
-                                if {max_content_length} > 0 and length of cleanText > {max_content_length} then
-                                    set contentPreview to text 1 thru {max_content_length} of cleanText & "..."
+                                if messageRead then
+                                    set readIndicator to "\u2713"
                                 else
-                                    set contentPreview to cleanText
+                                    set readIndicator to "\u2709"
                                 end if
 
-                                set outputText to outputText & "   Content: " & contentPreview & return
-                            on error
-                                set outputText to outputText & "   Content: [Not available]" & return
-                            end try
+                                set outputText to outputText & readIndicator & " " & messageSubject & return
+                                set outputText to outputText & "   From: " & messageSender & return
+                                set outputText to outputText & "   Date: " & (messageDate as string) & return
+                                set outputText to outputText & "   Mailbox: " & mailboxName & return
 
-                            set outputText to outputText & return
-                            set resultCount to resultCount + 1
-                        end if
-                    end try
-                end repeat
-            end repeat
+                                -- Get content preview
+                                try
+                                    set msgContent to content of aMessage
+                                    set AppleScript's text item delimiters to {{return, linefeed}}
+                                    set contentParts to text items of msgContent
+                                    set AppleScript's text item delimiters to " "
+                                    set cleanText to contentParts as string
+                                    set AppleScript's text item delimiters to ""
+
+                                    -- Handle content length limit (0 = unlimited)
+                                    if {max_content_length} > 0 and length of cleanText > {max_content_length} then
+                                        set contentPreview to text 1 thru {max_content_length} of cleanText & "..."
+                                    else
+                                        set contentPreview to cleanText
+                                    end if
+
+                                    set outputText to outputText & "   Content: " & contentPreview & return
+                                on error
+                                    set outputText to outputText & "   Content: [Not available]" & return
+                                end try
+
+                                set outputText to outputText & return
+                                set resultCount to resultCount + 1
+                            end try
+                        end repeat
+
+            {mailbox_end}
 
             set outputText to outputText & "========================================" & return
             set outputText to outputText & "FOUND: " & resultCount & " matching email(s)" & return
@@ -187,7 +364,7 @@ def get_email_with_content(
     end tell
     '''
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=60)
     return result
 
 
@@ -225,7 +402,22 @@ def search_emails(
     Returns:
         Formatted list of matching emails with all requested details
     """
+    # --- IMAP fast path ---
+    imap_results = _try_imap_search(
+        account,
+        mailbox,
+        subject=subject_keyword,
+        sender=sender,
+        date_from=date_from,
+        date_to=date_to,
+        is_read=True if read_status == "read" else (False if read_status == "unread" else None),
+        max_results=max_results,
+        include_content=include_content,
+    )
+    if imap_results is not None:
+        return _format_imap_results(imap_results, output_format, title="SEARCH RESULTS (IMAP)")
 
+    # --- AppleScript fallback ---
     # Escape user inputs for AppleScript
     escaped_account = escape_applescript(account)
     escaped_mailbox = escape_applescript(mailbox)
@@ -410,7 +602,7 @@ def search_emails(
     end tell
     '''
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=60)
 
     if output_format == "json":
         # Re-run with pipe-delimited output for structured parsing
@@ -520,7 +712,7 @@ def _search_emails_json(
         return resultLines as string
     end tell
     '''
-    raw = run_applescript(script)
+    raw = run_applescript(script, timeout=60)
     emails = []
     if raw:
         for line in raw.split("\n"):
@@ -568,7 +760,23 @@ def search_by_sender(
     Returns:
         Formatted list of emails from the sender, sorted by date (newest first)
     """
+    # --- IMAP fast path ---
+    from datetime import datetime, timedelta
 
+    imap_since = None
+    if days_back > 0:
+        imap_since = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    imap_results = _try_imap_search(
+        account,
+        mailbox,
+        sender=sender,
+        date_from=imap_since,
+        max_results=max_results,
+    )
+    if imap_results is not None:
+        return _format_imap_results(imap_results, output_format="text", title=f"EMAILS FROM SENDER: {sender} (IMAP)")
+
+    # --- AppleScript fallback ---
     # Escape user inputs for AppleScript
     escaped_sender = escape_applescript(sender)
     escaped_mailbox = escape_applescript(mailbox)
@@ -730,7 +938,7 @@ def search_by_sender(
     end tell
     """
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=60)
     return result
 
 
@@ -761,6 +969,18 @@ def search_email_content(
     Returns:
         Emails where the search text appears in body and/or subject
     """
+    # --- IMAP fast path ---
+    imap_results = _try_imap_search(
+        account,
+        mailbox,
+        subject=search_text if search_subject else None,
+        body=search_text if search_body else None,
+        max_results=max_results,
+    )
+    if imap_results is not None:
+        return _format_imap_results(imap_results, output_format="text", title=f"CONTENT SEARCH: {search_text} (IMAP)")
+
+    # --- AppleScript fallback ---
     escaped_search = escape_applescript(search_text)
     escaped_account = escape_applescript(account)
     escaped_mailbox = escape_applescript(mailbox)
@@ -838,7 +1058,7 @@ def search_email_content(
         return outputText
     end tell
     '''
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=60)
     return result
 
 
@@ -865,6 +1085,44 @@ def get_newsletters(
     Returns:
         List of detected newsletter emails sorted by date
     """
+    # --- IMAP fast path ---
+    if account is not None:
+        from datetime import datetime, timedelta
+
+        from apple_mail_mcp.constants import NEWSLETTER_KEYWORD_PATTERNS, NEWSLETTER_PLATFORM_PATTERNS
+
+        imap_since = None
+        if days_back > 0:
+            imap_since = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+        all_patterns = NEWSLETTER_PLATFORM_PATTERNS + NEWSLETTER_KEYWORD_PATTERNS
+        all_imap_results: list[dict[str, str]] = []
+        seen_subjects: set[str] = set()
+
+        if imap_backend.has_imap_config(account):
+            for pattern in all_patterns:
+                results = _try_imap_search(
+                    account,
+                    "INBOX",
+                    sender=pattern,
+                    date_from=imap_since,
+                    max_results=max_results - len(all_imap_results),
+                )
+                if results:
+                    for r in results:
+                        key = f"{r.get('subject', '')}|{r.get('date', '')}"
+                        if key not in seen_subjects:
+                            seen_subjects.add(key)
+                            all_imap_results.append(r)
+                if len(all_imap_results) >= max_results:
+                    break
+
+            if all_imap_results:
+                return _format_imap_results(
+                    all_imap_results[:max_results], output_format="text", title="NEWSLETTER DETECTION (IMAP)"
+                )
+
+    # --- AppleScript fallback ---
     # Escape user inputs for AppleScript
     escaped_account = escape_applescript(account) if account else None
 
@@ -895,13 +1153,21 @@ def get_newsletters(
         account_filter_start = f'if accountName is "{escaped_account}" then'
         account_filter_end = "end if"
 
+    # Build whose clause with or-chains from constants
+    from apple_mail_mcp.constants import NEWSLETTER_KEYWORD_PATTERNS, NEWSLETTER_PLATFORM_PATTERNS
+
+    all_patterns = NEWSLETTER_PLATFORM_PATTERNS + NEWSLETTER_KEYWORD_PATTERNS
+    sender_or_clause = " or ".join(f'sender contains "{p}"' for p in all_patterns)
+
     date_setup = ""
-    whose_date_clause = ""
+    whose_parts = [f"({sender_or_clause})"]
     if days_back > 0:
         date_setup = f"set cutoffDate to (current date) - ({days_back} * days)"
-        whose_date_clause = "whose date received > cutoffDate"
+        whose_parts.append("date received > cutoffDate")
 
-    script = f'''
+    whose_clause = " and ".join(whose_parts)
+
+    script = f"""
     tell application "Mail"
         set outputText to "\U0001f4f0 NEWSLETTER DETECTION" & return
         set outputText to outputText & "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501" & return & return
@@ -921,41 +1187,27 @@ def get_newsletters(
                     try
                         set mailboxName to name of aMailbox
                         if mailboxName is "INBOX" or mailboxName is "Inbox" then
-                            -- Use whose clause for date pre-filtering when available
-                            if "{whose_date_clause}" is not "" then
-                                set mailboxMessages to (every message of aMailbox {whose_date_clause})
-                            else
-                                set mailboxMessages to every message of aMailbox
-                            end if
-                            repeat with aMessage in mailboxMessages
+                            -- Use whose clause for fast newsletter detection
+                            set matchedMessages to (every message of aMailbox whose {whose_clause})
+                            repeat with aMessage in matchedMessages
                                 if resultCount >= {max_results} then exit repeat
                                 try
+                                    set messageSubject to subject of aMessage
                                     set messageSender to sender of aMessage
-                                    set isNewsletter to false
-                                    -- AppleScript contains is case-insensitive
-                                    if messageSender contains "substack.com" or messageSender contains "beehiiv.com" or messageSender contains "mailchimp" or messageSender contains "sendgrid" or messageSender contains "convertkit" or messageSender contains "buttondown" or messageSender contains "ghost.io" or messageSender contains "revue.co" or messageSender contains "mailgun" then
-                                        set isNewsletter to true
+                                    set messageDate to date received of aMessage
+                                    set messageRead to read status of aMessage
+                                    if messageRead then
+                                        set readIndicator to "\u2713"
+                                    else
+                                        set readIndicator to "\u2709"
                                     end if
-                                    if messageSender contains "newsletter" or messageSender contains "digest" or messageSender contains "weekly" or messageSender contains "daily" or messageSender contains "bulletin" or messageSender contains "briefing" or messageSender contains "news@" or messageSender contains "updates@" then
-                                        set isNewsletter to true
-                                    end if
-                                    if isNewsletter then
-                                        set messageSubject to subject of aMessage
-                                        set messageDate to date received of aMessage
-                                        set messageRead to read status of aMessage
-                                        if messageRead then
-                                            set readIndicator to "\u2713"
-                                        else
-                                            set readIndicator to "\u2709"
-                                        end if
-                                        set outputText to outputText & readIndicator & " " & messageSubject & return
-                                        set outputText to outputText & "   From: " & messageSender & return
-                                        set outputText to outputText & "   Date: " & (messageDate as string) & return
-                                        set outputText to outputText & "   Account: " & accountName & return
-                                        {content_script}
-                                        set outputText to outputText & return
-                                        set resultCount to resultCount + 1
-                                    end if
+                                    set outputText to outputText & readIndicator & " " & messageSubject & return
+                                    set outputText to outputText & "   From: " & messageSender & return
+                                    set outputText to outputText & "   Date: " & (messageDate as string) & return
+                                    set outputText to outputText & "   Account: " & accountName & return
+                                    {content_script}
+                                    set outputText to outputText & return
+                                    set resultCount to resultCount + 1
                                 end try
                             end repeat
                         end if
@@ -973,8 +1225,8 @@ def get_newsletters(
         set outputText to outputText & "========================================" & return
         return outputText
     end tell
-    '''
-    result = run_applescript(script)
+    """
+    result = run_applescript(script, timeout=60)
     return result
 
 
@@ -1013,6 +1265,25 @@ def get_recent_from_sender(
     days_back = time_ranges.get(time_range.lower(), 7)
     is_yesterday = time_range.lower() == "yesterday"
 
+    # --- IMAP fast path ---
+    from datetime import datetime, timedelta
+
+    imap_since = None
+    if days_back > 0:
+        imap_since = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    imap_results = _try_imap_search(
+        account,
+        mailbox,
+        sender=sender,
+        date_from=imap_since,
+        max_results=max_results,
+    )
+    if imap_results is not None:
+        return _format_imap_results(
+            imap_results, output_format="text", title=f"EMAILS FROM: {sender} ({time_range}) (IMAP)"
+        )
+
+    # --- AppleScript fallback ---
     # Escape user inputs for AppleScript
     escaped_sender = escape_applescript(sender)
     escaped_mailbox = escape_applescript(mailbox)
@@ -1170,7 +1441,7 @@ def get_recent_from_sender(
         return outputText
     end tell
     """
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=90)
     return result
 
 
@@ -1312,7 +1583,7 @@ def get_email_thread(account: str, subject_keyword: str, mailbox: str = "INBOX",
     end tell
     '''
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=90)
     return result
 
 
@@ -1529,7 +1800,7 @@ def search_all_accounts(
         end sortByDate
     """
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=90)
     return result
 
 
@@ -1541,12 +1812,15 @@ def search_emails_advanced(
     subject_contains: str | None = None,
     body_contains: str | None = None,
     sender_contains: str | None = None,
+    to_contains: str | None = None,
+    cc_contains: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     is_read: bool | None = None,
     has_attachments: bool | None = None,
     is_flagged: bool | None = None,
     max_results: int = 50,
+    offset: int = 0,
     output_format: str = "text",
 ) -> str:
     """
@@ -1556,23 +1830,49 @@ def search_emails_advanced(
     search_email_content, and search_all_accounts into one tool.
     When *account* is None, all accounts are searched.
 
+    Uses IMAP when available (much faster, no Mail.app freezes).
+    Falls back to AppleScript for accounts without IMAP configuration.
+
     Args:
         account: Account to search (None = all accounts)
         mailbox: Mailbox name (default "INBOX", "All" for all mailboxes)
         subject_contains: Filter by subject keyword (case-insensitive)
         body_contains: Filter by body text (slower, case-insensitive)
         sender_contains: Filter by sender name/email (case-insensitive)
+        to_contains: Filter by To recipient address (case-insensitive, IMAP-accelerated)
+        cc_contains: Filter by CC recipient address (case-insensitive, IMAP-accelerated)
         date_from: Start date "YYYY-MM-DD" (inclusive)
         date_to: End date "YYYY-MM-DD" (inclusive)
         is_read: Filter by read status (True/False/None for any)
         has_attachments: Filter by attachment presence (True/False/None)
         is_flagged: Filter by flagged status (True/False/None)
         max_results: Maximum results (default 50)
+        offset: Skip first N results for pagination (default 0)
         output_format: "text" (human-readable) or "json" (structured)
 
     Returns:
         Matching emails across the specified scope
     """
+    # --- IMAP fast path ---
+    imap_results = _try_imap_search(
+        account,
+        mailbox,
+        to=to_contains,
+        cc=cc_contains,
+        subject=subject_contains,
+        sender=sender_contains,
+        body=body_contains,
+        date_from=date_from,
+        date_to=date_to,
+        is_read=is_read,
+        is_flagged=is_flagged,
+        max_results=max_results,
+        offset=offset,
+    )
+    if imap_results is not None:
+        return _format_imap_results(imap_results, output_format, title="ADVANCED SEARCH RESULTS (IMAP)")
+
+    # --- AppleScript fallback ---
     from apple_mail_mcp.core import build_mailbox_ref, skip_folders_condition
 
     escaped_account = escape_applescript(account) if account else None
@@ -1599,6 +1899,28 @@ def search_emails_advanced(
         filter_lines.append("if not (flagged status of aMessage) then set skipMsg to true")
     elif is_flagged is False:
         filter_lines.append("if (flagged status of aMessage) then set skipMsg to true")
+
+    # Recipient post-filter (can't use whose for nested recipient objects)
+    if to_contains:
+        escaped_to = escape_applescript(to_contains)
+        filter_lines.append(f"""set toMatch to false
+                                    repeat with r in (every to recipient of aMessage)
+                                        if address of r contains "{escaped_to}" then
+                                            set toMatch to true
+                                            exit repeat
+                                        end if
+                                    end repeat
+                                    if not toMatch then set skipMsg to true""")
+    if cc_contains:
+        escaped_cc = escape_applescript(cc_contains)
+        filter_lines.append(f"""set ccMatch to false
+                                    repeat with r in (every cc recipient of aMessage)
+                                        if address of r contains "{escaped_cc}" then
+                                            set ccMatch to true
+                                            exit repeat
+                                        end if
+                                    end repeat
+                                    if not ccMatch then set skipMsg to true""")
 
     filter_block = "\n                                    ".join(filter_lines)
 
@@ -1722,7 +2044,7 @@ def search_emails_advanced(
     end tell
     """
 
-    raw = run_applescript(script)
+    raw = run_applescript(script, timeout=60)
 
     if output_format == "json":
         emails: list[dict[str, Any]] = []
