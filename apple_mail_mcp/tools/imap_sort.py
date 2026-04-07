@@ -227,7 +227,12 @@ def sort_inbox(
             _logger.info("Dry run: %d to move, %d to trash, %d unmatched", move_count, trash_count, unmatched)
             return "\n".join(lines)
 
-        # Execute moves
+        # Execute moves with micro-batching and intermediate expunge
+        # Proton Bridge is very slow at IMAP MOVE — doing all moves then
+        # expunging causes multi-hour hangs. Instead we expunge every
+        # MICRO_BATCH moves and send keepalives to prevent timeouts.
+        MICRO_BATCH = 10
+
         lines.append("")
         lines.append("── Moving ──")
         _logger.info("Starting moves: %d emails", len(all_moves))
@@ -243,6 +248,7 @@ def sort_inbox(
         current_dest = None
         dest_succeeded = 0
         dest_failed = 0
+        since_expunge = 0
 
         for i, (dest, uid) in enumerate(all_moves, 1):
             if dest != current_dest:
@@ -264,9 +270,20 @@ def sort_inbox(
             if imap_backend.move_message(conn, uid, imap_dest):
                 succeeded += 1
                 dest_succeeded += 1
+                since_expunge += 1
             else:
                 failed += 1
                 dest_failed += 1
+
+            # Micro-batch: expunge and keepalive every MICRO_BATCH moves
+            # This prevents Proton Bridge from queueing hundreds of deletes
+            if since_expunge >= MICRO_BATCH:
+                try:
+                    conn.expunge()
+                    imap_backend.keepalive(conn)
+                except Exception:
+                    _logger.warning("  expunge/keepalive failed at move %d", i)
+                since_expunge = 0
 
             # Log progress every 25 moves
             if i % 25 == 0:
@@ -284,7 +301,11 @@ def sort_inbox(
                 status += f"  ✗ {dest_failed} failed"
             lines.append(f"  {label:40} {status}")
 
-        conn.expunge()
+        # Final expunge for any remaining deletions
+        try:
+            conn.expunge()
+        except Exception:
+            _logger.warning("  final expunge failed")
         elapsed = time.time() - t0
 
         lines.append("")
@@ -392,14 +413,26 @@ def imap_bulk_move(
 
         moved = 0
         failed = 0
+        since_expunge = 0
+        MICRO_BATCH = 10
         t0 = time.time()
         _logger.info("Moving %d emails from %s to %s ...", len(to_move), from_mailbox, to_mailbox)
 
         for i, (uid, _) in enumerate(to_move, 1):
             if imap_backend.move_message(conn, uid, imap_to):
                 moved += 1
+                since_expunge += 1
             else:
                 failed += 1
+
+            # Micro-batch: expunge and keepalive to prevent slow-server hangs
+            if since_expunge >= MICRO_BATCH:
+                try:
+                    conn.expunge()
+                    imap_backend.keepalive(conn)
+                except Exception:
+                    _logger.warning("  expunge/keepalive failed at move %d", i)
+                since_expunge = 0
 
             if i % 25 == 0:
                 elapsed = time.time() - t0

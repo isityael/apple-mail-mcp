@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 import time
 from collections import defaultdict
@@ -116,6 +117,9 @@ def main() -> None:
         # Select source folder read-write
         src_conn.select(f'"{folder}"', readonly=False)
 
+        since_expunge = 0
+        MICRO_BATCH = 10
+
         for uid in uids:
             # Fetch full message from source
             msg_bytes = imap_backend.fetch_full_message(src_conn, uid)
@@ -133,16 +137,28 @@ def main() -> None:
                 # Delete from source
                 imap_backend.delete_message(src_conn, uid)
                 moved += 1
+                since_expunge += 1
             else:
                 failed += 1
+
+            # Micro-batch: expunge and keepalive to prevent slow-server hangs
+            if since_expunge >= MICRO_BATCH:
+                try:
+                    src_conn.expunge()
+                    imap_backend.keepalive(src_conn)
+                    imap_backend.keepalive(dst_conn)
+                except Exception:
+                    pass
+                since_expunge = 0
 
             if moved % 10 == 0 and moved > 0:
                 elapsed = time.time() - t0
                 rate = moved / elapsed if elapsed > 0 else 0
                 print(f"  Progress: {moved}/{total} ({rate:.1f}/s)")
 
-        # Expunge deleted messages in this folder
-        src_conn.expunge()
+        # Expunge remaining deletions in this folder
+        with contextlib.suppress(Exception):
+            src_conn.expunge()
         print(f"  {folder} -> {dst_folder}: {len(uids)} email(s)")
 
     elapsed = time.time() - t0

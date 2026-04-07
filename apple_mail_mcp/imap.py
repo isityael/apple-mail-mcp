@@ -258,21 +258,38 @@ def _extract_uid(line: str) -> bytes | None:
     return None
 
 
-def move_message(imap: imaplib.IMAP4, uid: bytes, destination: str) -> bool:
+def move_message(imap: imaplib.IMAP4, uid: bytes, destination: str, *, timeout: int = 60) -> bool:
     """Move a single UID to destination folder.
 
     Uses MOVE (RFC 6851) if available, falls back to COPY+DELETE.
+    Sets a per-operation socket timeout to prevent hanging on slow servers.
     """
     dest_quoted = f'"{destination}"'
-    typ, _ = imap.uid("move", uid, dest_quoted)
-    if typ == "OK":
+    old_timeout = imap.socket().gettimeout()
+    try:
+        imap.socket().settimeout(timeout)
+        typ, _ = imap.uid("move", uid, dest_quoted)
+        if typ == "OK":
+            return True
+        # Fallback
+        typ, _ = imap.uid("copy", uid, dest_quoted)
+        if typ != "OK":
+            return False
+        imap.uid("store", uid, "+FLAGS", r"(\Deleted)")
         return True
-    # Fallback
-    typ, _ = imap.uid("copy", uid, dest_quoted)
-    if typ != "OK":
+    except (TimeoutError, OSError):
         return False
-    imap.uid("store", uid, "+FLAGS", r"(\Deleted)")
-    return True
+    finally:
+        imap.socket().settimeout(old_timeout)
+
+
+def keepalive(imap: imaplib.IMAP4) -> bool:
+    """Send NOOP to keep the IMAP connection alive. Returns True on success."""
+    try:
+        typ, _ = imap.noop()
+        return typ == "OK"
+    except Exception:
+        return False
 
 
 def create_folder(imap: imaplib.IMAP4, name: str) -> bool:
