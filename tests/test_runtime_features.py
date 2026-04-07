@@ -181,7 +181,7 @@ def test_search_email_content_uses_native_whose_filter():
     old_run_applescript = search.run_applescript
     captured: dict[str, str] = {}
 
-    def fake_run_applescript(script: str) -> str:
+    def fake_run_applescript(script: str, **kwargs) -> str:
         captured["script"] = script
         return "SEARCH_OK"
 
@@ -204,7 +204,7 @@ def test_search_emails_advanced_uses_native_body_filter():
     old_run_applescript = search.run_applescript
     captured: dict[str, str] = {}
 
-    def fake_run_applescript(script: str) -> str:
+    def fake_run_applescript(script: str, **kwargs) -> str:
         captured["script"] = script
         return "ADVANCED_OK"
 

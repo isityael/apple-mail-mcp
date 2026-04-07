@@ -177,7 +177,7 @@ def mark_emails(
     end tell
     '''
 
-    return run_applescript(script)
+    return run_applescript(script, timeout=90)
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +296,7 @@ def delete_emails(
     end tell
     '''
 
-    return run_applescript(script)
+    return run_applescript(script, timeout=90)
 
 
 # ---------------------------------------------------------------------------
@@ -425,4 +425,4 @@ def bulk_move_emails(
     end tell
     '''
 
-    return run_applescript(script)
+    return run_applescript(script, timeout=90)

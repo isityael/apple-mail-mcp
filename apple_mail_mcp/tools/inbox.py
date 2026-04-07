@@ -478,7 +478,7 @@ def list_mailboxes(account: str | None = None, include_counts: bool = True) -> s
     end tell
     """
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=60)
     return result
 
 
@@ -665,5 +665,5 @@ def get_inbox_overview() -> str:
     end tell
     """
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=60)
     return result

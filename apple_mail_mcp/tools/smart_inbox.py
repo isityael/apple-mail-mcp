@@ -210,7 +210,7 @@ def get_awaiting_reply(
     {_strip_subject_prefixes_script()}
     '''
 
-    return run_applescript(script)
+    return run_applescript(script, timeout=60)
 
 
 @mcp.tool()
@@ -399,7 +399,7 @@ def get_needs_response(
     {_strip_subject_prefixes_script()}
     '''
 
-    return run_applescript(script)
+    return run_applescript(script, timeout=60)
 
 
 @mcp.tool()
@@ -574,4 +574,4 @@ def get_top_senders(
     end tell
     '''
 
-    return run_applescript(script)
+    return run_applescript(script, timeout=60)

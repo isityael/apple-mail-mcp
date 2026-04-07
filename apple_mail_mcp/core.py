@@ -46,10 +46,30 @@ def _sanitize_for_json(text: str) -> str:
     return "".join(ch for ch in text if ch in ("\n", "\t") or (" " <= ch <= "~"))
 
 
-def run_applescript(script: str) -> str:
-    """Execute AppleScript via stdin pipe for reliable multi-line handling"""
+def check_mail_app() -> bool:
+    """Return True if Mail.app is running and responsive."""
     try:
-        result = subprocess.run(["osascript", "-"], input=script.encode("utf-8"), capture_output=True, timeout=120)
+        result = subprocess.run(
+            ["osascript", "-"],
+            input=b'tell application "System Events" to return (name of processes) contains "Mail"',
+            capture_output=True,
+            timeout=5,
+        )
+        return result.stdout.decode().strip().lower() == "true"
+    except Exception:
+        return False
+
+
+def run_applescript(script: str, *, timeout: int = 30) -> str:
+    """Execute AppleScript via stdin pipe for reliable multi-line handling.
+
+    Args:
+        script: The AppleScript source to execute.
+        timeout: Maximum seconds to wait (default 30). Pass higher values
+                 for known-heavy operations (content search, bulk, export).
+    """
+    try:
+        result = subprocess.run(["osascript", "-"], input=script.encode("utf-8"), capture_output=True, timeout=timeout)
         if result.returncode != 0:
             stderr = result.stderr.decode("utf-8", errors="replace").strip()
             if stderr:
@@ -57,7 +77,11 @@ def run_applescript(script: str) -> str:
         output = result.stdout.decode("utf-8", errors="replace").strip()
         return _sanitize_for_json(output)
     except subprocess.TimeoutExpired as e:
-        raise Exception("AppleScript execution timed out") from e
+        raise Exception(
+            f"AppleScript execution timed out after {timeout}s. "
+            "The mailbox may be very large or Mail.app may be busy syncing. "
+            "Try narrowing the search, reducing max_results, or using an IMAP-configured account."
+        ) from e
     except Exception as e:
         raise Exception(f"AppleScript execution failed: {str(e)}") from e
 

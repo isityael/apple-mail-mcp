@@ -382,7 +382,7 @@ def get_statistics(
     else:
         return f"Error: Invalid scope '{scope}'. Use: account_overview, sender_stats, mailbox_breakdown"
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=60)
     return result
 
 
@@ -611,7 +611,7 @@ def export_emails(
     else:
         return f"Error: Invalid scope '{scope}'. Use: single_email, entire_mailbox"
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=90)
     return result
 
 
@@ -684,7 +684,7 @@ def _get_recent_emails_structured(max_total: int = 20, max_per_account: int = 10
     end tell
     """
 
-    result = run_applescript(script)
+    result = run_applescript(script, timeout=60)
 
     # Parse the result into structured data
     emails = []
