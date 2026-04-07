@@ -259,19 +259,17 @@ def _extract_uid(line: str) -> bytes | None:
 
 
 def move_message(imap: imaplib.IMAP4, uid: bytes, destination: str, *, timeout: int = 60) -> bool:
-    """Move a single UID to destination folder.
+    """Move a single UID to destination folder via COPY+DELETE.
 
-    Uses MOVE (RFC 6851) if available, falls back to COPY+DELETE.
+    Always uses COPY+DELETE instead of MOVE (RFC 6851) because Proton
+    Bridge's MOVE implementation is extremely slow and causes multi-hour
+    hangs on batch operations.  The caller must EXPUNGE periodically.
     Sets a per-operation socket timeout to prevent hanging on slow servers.
     """
     dest_quoted = f'"{destination}"'
     old_timeout = imap.socket().gettimeout()
     try:
         imap.socket().settimeout(timeout)
-        typ, _ = imap.uid("move", uid, dest_quoted)
-        if typ == "OK":
-            return True
-        # Fallback
         typ, _ = imap.uid("copy", uid, dest_quoted)
         if typ != "OK":
             return False
