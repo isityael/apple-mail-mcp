@@ -4,15 +4,15 @@
   "version": "2.6.0",
   "description": "IMAP-first email management for Apple Mail with 37 tools — IMAP-accelerated search with recipient filtering, cross-account moves, HTML/plain-text composition, bulk operations, smart inbox analytics, folder management, IMAP sorting, and optional read-only mode.",
   "author": {
-    "name": "isityael"
+    "name": "yaelmoshi"
   },
   "license": "MIT",
-  "homepage": "https://github.com/isityael/apple-mail-mcp",
+  "homepage": "https://github.com/yaelmoshi/apple-mail-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/isityael/apple-mail-mcp.git"
+    "url": "https://github.com/yaelmoshi/apple-mail-mcp.git"
   },
-  "documentation": "https://github.com/isityael/apple-mail-mcp#readme",
+  "documentation": "https://github.com/yaelmoshi/apple-mail-mcp#readme",
   "user_config": {
     "user_preferences": {
       "type": "string",

@@ -1,5 +1,5 @@
 {
-  "repositoryUrl": "https://github.com/isityael/apple-mail-mcp.git",
+  "repositoryUrl": "https://github.com/yaelmoshi/apple-mail-mcp.git",
   "branches": ["main"],
   "plugins": [
     "@semantic-release/commit-analyzer",

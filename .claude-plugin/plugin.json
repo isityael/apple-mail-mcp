@@ -3,7 +3,7 @@
   "description": "IMAP-first email management for Apple Mail — search, compose, triage, organise, and analyse email with 37 MCP tools, IMAP acceleration, cross-account moves, and an expert email management skill",
   "version": "2.5.0",
   "author": {
-    "name": "isityael"
+    "name": "yaelmoshi"
   },
   "commands": [
     "./commands/"

@@ -47,7 +47,7 @@ steps:
       - apk add --no-cache git
       - git config user.name "woodpecker[bot]"
       - git config user.email "woodpecker@m0sh1.cc"
-      - git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/isityael/apple-mail-mcp.git"
+      - git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/yaelmoshi/apple-mail-mcp.git"
       - git fetch --tags origin
       - npm ci
       - npx semantic-release
@@ -94,7 +94,7 @@ steps:
         MCPB="apple-mail-mcp-${CI_COMMIT_TAG}.mcpb"
         test -f "$MCPB" || { echo "Missing: $MCPB"; exit 1; }
         test -f "$MCPB.sha256" || { echo "Missing: $MCPB.sha256"; exit 1; }
-        REPO="isityael/apple-mail-mcp"
+        REPO="yaelmoshi/apple-mail-mcp"
         # semantic-release creates a draft release; upload assets then publish
         gh release upload "${CI_COMMIT_TAG}" "$MCPB" "$MCPB.sha256" --repo "$REPO" --clobber
         gh release edit "${CI_COMMIT_TAG}" --repo "$REPO" --draft=false
@@ -113,12 +113,12 @@ steps:
       - |
         export GH_TOKEN="${GITHUB_TOKEN}"
         VERSION="${CI_COMMIT_TAG#v}"
-        TARBALL_URL="https://github.com/isityael/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz"
+        TARBALL_URL="https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz"
         echo "Fetching SHA256 for ${TARBALL_URL}..."
         SHA256=$(curl -sL "$TARBALL_URL" | sha256sum | cut -d' ' -f1)
         echo "Version=${VERSION} SHA256=${SHA256}"
 
-        TAP_REPO="isityael/tap"
+        TAP_REPO="yaelmoshi/tap"
         FILE_PATH="Formula/apple-mail-mcp.rb"
 
         # Fetch current file content and SHA
@@ -128,7 +128,7 @@ steps:
 
         # Update URL and SHA256 in formula
         UPDATED=$(echo "$CONTENT" \
-          | sed "s|url \"https://github.com/isityael/apple-mail-mcp/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/isityael/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz\"|" \
+          | sed "s|url \"https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz\"|" \
           | sed "s|sha256 \"[a-f0-9]\{64\}\"|sha256 \"${SHA256}\"|")
 
         # Skip if no changes

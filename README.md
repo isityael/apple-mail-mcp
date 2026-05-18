@@ -16,7 +16,7 @@ An MCP server that gives AI assistants full access to Apple Mail -- read, search
 **Prerequisites:** macOS with Apple Mail configured, Python 3.13+, `uv`
 
 ```bash
-git clone https://github.com/isityael/apple-mail-mcp.git
+git clone https://github.com/yaelmoshi/apple-mail-mcp.git
 cd apple-mail-mcp
 uv sync
 ```
@@ -36,7 +36,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 Restart Claude Desktop and grant Mail.app permissions when prompted.
 
-> **Tip:** An `.mcpb` bundle is also available on the [Releases](https://github.com/isityael/apple-mail-mcp/releases) page for one-click install in Claude Desktop.
+> **Tip:** An `.mcpb` bundle is also available on the [Releases](https://github.com/yaelmoshi/apple-mail-mcp/releases) page for one-click install in Claude Desktop.
 
 ## Tools (37)
 
