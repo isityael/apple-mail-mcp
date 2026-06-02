@@ -6,7 +6,7 @@ when:
 
 steps:
   - name: lint
-    image: dhi.io/uv:0.11.17-debian13-dev@sha256:d47efbfb994c4db8bf7e8e9f88085045549fa9d5dd4daf6ce0a03946315ce286
+    image: dhi.io/uv:0.11.18-debian13-dev@sha256:96699f31c1e4a6308321ac9e2b37ede3c6c522b2abe83396bd34dcfbc7d96f6f
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
     commands:
@@ -15,7 +15,7 @@ steps:
       - uv run ruff format --check .
 
   - name: check
-    image: dhi.io/uv:0.11.17-debian13-dev@sha256:d47efbfb994c4db8bf7e8e9f88085045549fa9d5dd4daf6ce0a03946315ce286
+    image: dhi.io/uv:0.11.18-debian13-dev@sha256:96699f31c1e4a6308321ac9e2b37ede3c6c522b2abe83396bd34dcfbc7d96f6f
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
     commands:
