@@ -6,9 +6,12 @@ import re
 from apple_mail_mcp.core import (
     build_filter_condition,
     build_mailbox_ref,
+    equals_any_numeric_condition,
     escape_applescript,
     inbox_mailbox_script,
     inject_preferences,
+    normalize_message_ids,
+    resolve_flag_color,
     run_applescript,
 )
 from apple_mail_mcp.server import mcp
@@ -17,7 +20,12 @@ from apple_mail_mcp.server import mcp
 @mcp.tool()
 @inject_preferences
 def move_email(
-    account: str, subject_keyword: str, to_mailbox: str, from_mailbox: str = "INBOX", max_moves: int = 1
+    account: str,
+    subject_keyword: str | None,
+    to_mailbox: str,
+    from_mailbox: str = "INBOX",
+    max_moves: int = 1,
+    message_ids: list[str] | None = None,
 ) -> str:
     """
     Move email(s) matching a subject keyword from one mailbox to another.
@@ -28,6 +36,7 @@ def move_email(
         to_mailbox: Destination mailbox name. For nested mailboxes, use "/" separator (e.g., "Projects/Amplify Impact")
         from_mailbox: Source mailbox name (default: "INBOX")
         max_moves: Maximum number of emails to move (default: 1, safety limit)
+        message_ids: Exact Apple Mail message ids to move; when provided, subject filtering is ignored
 
     Returns:
         Confirmation message with details of moved emails
@@ -35,7 +44,7 @@ def move_email(
 
     # Escape all user inputs for AppleScript
     safe_account = escape_applescript(account)
-    safe_subject_keyword = escape_applescript(subject_keyword)
+    safe_subject_keyword = escape_applescript(subject_keyword) if subject_keyword else ""
     safe_from_mailbox = escape_applescript(from_mailbox)
     safe_to_mailbox = escape_applescript(to_mailbox)
 
@@ -51,6 +60,52 @@ def move_email(
         dest_mailbox_script += "targetAccount"
     else:
         dest_mailbox_script = f'mailbox "{safe_to_mailbox}" of targetAccount'
+
+    if message_ids is not None:
+        normalized_ids = normalize_message_ids(message_ids)
+        if not normalized_ids:
+            return "Error: 'message_ids' must contain one or more numeric Mail ids"
+        id_condition = equals_any_numeric_condition("id", normalized_ids)
+        script = f'''
+        tell application "Mail"
+            set outputText to "MOVING EMAILS BY IDS" & return & return
+            set movedCount to 0
+
+            try
+                set targetAccount to account "{safe_account}"
+                {build_mailbox_ref(from_mailbox, var_name="sourceMailbox")}
+                set destMailbox to {dest_mailbox_script}
+                set sourceMessages to every message of sourceMailbox whose {id_condition}
+
+                repeat with aMessage in sourceMessages
+                    try
+                        set messageSubject to subject of aMessage
+                        set messageSender to sender of aMessage
+                        set messageDate to date received of aMessage
+                        move aMessage to destMailbox
+                        set outputText to outputText & "✓ Moved: " & messageSubject & return
+                        set outputText to outputText & "  From: " & messageSender & return
+                        set outputText to outputText & "  Date: " & (messageDate as string) & return
+                        set outputText to outputText & "  {safe_from_mailbox} → {safe_to_mailbox}" & return & return
+                        set movedCount to movedCount + 1
+                    end try
+                end repeat
+
+                set outputText to outputText & "========================================" & return
+                set outputText to outputText & "REQUESTED: {len(normalized_ids)} id(s), MOVED: " & movedCount & return
+                set outputText to outputText & "========================================" & return
+
+            on error errMsg
+                return "Error: " & errMsg
+            end try
+
+            return outputText
+        end tell
+        '''
+        return run_applescript(script)
+
+    if not subject_keyword:
+        return "Error: subject_keyword is required unless message_ids is provided"
 
     script = f'''
     tell application "Mail"
@@ -232,6 +287,8 @@ def update_email_status(
     mailbox: str = "INBOX",
     max_updates: int = 10,
     apply_to_all: bool = False,
+    message_ids: list[str] | None = None,
+    flag_color: str | None = None,
 ) -> str:
     """
     Update email status - mark as read/unread or flag/unflag emails.
@@ -244,17 +301,28 @@ def update_email_status(
         mailbox: Mailbox to search in (default: "INBOX")
         max_updates: Maximum number of emails to update (safety limit, default: 10)
         apply_to_all: Must be True to allow updates without subject_keyword or sender filter
+        message_ids: Exact Apple Mail message ids to update; when provided, filters are ignored
+        flag_color: Optional flag color for action="flag": red, orange, yellow, green, blue, purple, gray
 
     Returns:
         Confirmation message with details of updated emails
     """
 
     # Safety check: require at least one filter or explicit apply_to_all
-    if not subject_keyword and not sender and not apply_to_all:
+    if message_ids is None and not subject_keyword and not sender and not apply_to_all:
         return (
             "Error: No filter provided. Provide subject_keyword or sender to filter emails, "
             "or set apply_to_all=True to update all messages in the mailbox."
         )
+
+    flag_index: int | None = None
+    if flag_color is not None:
+        if action != "flag":
+            return "Error: 'flag_color' is only valid with action='flag'"
+        try:
+            flag_index = resolve_flag_color(flag_color)
+        except ValueError as exc:
+            return f"Error: {exc}"
 
     # Escape all user inputs for AppleScript
     safe_account = escape_applescript(account)
@@ -270,13 +338,58 @@ def update_email_status(
         action_script = "set read status of aMessage to false"
         action_label = "Marked as unread"
     elif action == "flag":
-        action_script = "set flagged status of aMessage to true"
-        action_label = "Flagged"
+        if flag_index is None:
+            action_script = "set flagged status of aMessage to true"
+            action_label = "Flagged"
+        else:
+            action_script = f"set flagged status of aMessage to true\n                        set flag index of aMessage to {flag_index}"
+            action_label = f"Flagged ({flag_color.strip().lower()})"
     elif action == "unflag":
         action_script = "set flagged status of aMessage to false"
         action_label = "Unflagged"
     else:
         return f"Error: Invalid action '{action}'. Use: mark_read, mark_unread, flag, unflag"
+
+    if message_ids is not None:
+        normalized_ids = normalize_message_ids(message_ids)
+        if not normalized_ids:
+            return "Error: 'message_ids' must contain one or more numeric Mail ids"
+        id_condition = equals_any_numeric_condition("id", normalized_ids)
+        script = f'''
+        tell application "Mail"
+            set outputText to "UPDATING EMAIL STATUS BY IDS: {action_label}" & return & return
+            set updateCount to 0
+
+            try
+                set targetAccount to account "{safe_account}"
+                {build_mailbox_ref(mailbox, var_name="targetMailbox")}
+                set mailboxMessages to every message of targetMailbox whose {id_condition}
+
+                repeat with aMessage in mailboxMessages
+                    try
+                        set messageSubject to subject of aMessage
+                        set messageSender to sender of aMessage
+                        set messageDate to date received of aMessage
+                        {action_script}
+                        set outputText to outputText & "✓ {action_label}: " & messageSubject & return
+                        set outputText to outputText & "   From: " & messageSender & return
+                        set outputText to outputText & "   Date: " & (messageDate as string) & return & return
+                        set updateCount to updateCount + 1
+                    end try
+                end repeat
+
+                set outputText to outputText & "========================================" & return
+                set outputText to outputText & "REQUESTED: {len(normalized_ids)} id(s), UPDATED: " & updateCount & return
+                set outputText to outputText & "========================================" & return
+
+            on error errMsg
+                return "Error: " & errMsg
+            end try
+
+            return outputText
+        end tell
+        '''
+        return run_applescript(script)
 
     script = f'''
     tell application "Mail"
@@ -738,3 +851,74 @@ def archive_emails(
     '''
 
     return run_applescript(script)
+
+
+@mcp.tool()
+@inject_preferences
+def synchronize_account(account: str | None = None) -> str:
+    """
+    Ask Apple Mail to synchronize one account or all accounts.
+
+    Args:
+        account: Optional account name. When omitted, all accounts are synchronized.
+
+    Returns:
+        Summary of synchronization requests. Mail may continue syncing after this tool returns.
+    """
+    per_account_timeout_s = 8
+    safe_account = escape_applescript(account) if account else ""
+
+    if account:
+        script = f'''
+        tell application "Mail"
+            set outputText to "SYNCHRONIZING ACCOUNT" & return & return
+            try
+                set targetAccount to account "{safe_account}"
+                try
+                    with timeout of {per_account_timeout_s} seconds
+                        synchronize with targetAccount
+                    end timeout
+                    set outputText to outputText & "Queued sync: " & name of targetAccount & return
+                on error errMsg number errNum
+                    if errNum is -1712 then
+                        set outputText to outputText & "Queued sync: " & name of targetAccount & " (Mail continued after timeout)" & return
+                    else
+                        return "Error: " & errMsg
+                    end if
+                end try
+            on error errMsg
+                return "Error: " & errMsg
+            end try
+            return outputText
+        end tell
+        '''
+    else:
+        script = f"""
+        tell application "Mail"
+            set outputText to "SYNCHRONIZING ALL ACCOUNTS" & return & return
+            try
+                set queuedCount to 0
+                repeat with targetAccount in every account
+                    try
+                        with timeout of {per_account_timeout_s} seconds
+                            synchronize with targetAccount
+                        end timeout
+                        set outputText to outputText & "Queued sync: " & name of targetAccount & return
+                    on error errMsg number errNum
+                        if errNum is -1712 then
+                            set outputText to outputText & "Queued sync: " & name of targetAccount & " (Mail continued after timeout)" & return
+                        else
+                            set outputText to outputText & "Skipped: " & name of targetAccount & " - " & errMsg & return
+                        end if
+                    end try
+                    set queuedCount to queuedCount + 1
+                end repeat
+                set outputText to outputText & return & "TOTAL ACCOUNTS REQUESTED: " & queuedCount & return
+            on error errMsg
+                return "Error: " & errMsg
+            end try
+            return outputText
+        end tell
+        """
+
+    return run_applescript(script, timeout=60)

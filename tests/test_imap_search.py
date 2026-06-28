@@ -82,3 +82,19 @@ def test_build_criteria_combined():
 def test_build_criteria_cc():
     result = build_imap_search_criteria(cc="team@example.com")
     assert result == 'CC "team@example.com"'
+
+
+if __name__ == "__main__":
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    passed = 0
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            passed += 1
+            print(f"  PASS  {t.__name__}")
+        except AssertionError as e:
+            failed += 1
+            print(f"  FAIL  {t.__name__}: {e}")
+    print(f"\n{passed} passed, {failed} failed")
+    sys.exit(1 if failed else 0)

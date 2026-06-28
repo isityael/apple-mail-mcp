@@ -88,13 +88,14 @@ else
     exit 1
 fi
 
-# Step 5b: Copy Email Management Plugin (optional)
-echo -e "\n${YELLOW}Step 5b: Copying Email Management Plugin...${NC}"
-if [ -d "${SOURCE_DIR}/skill-email-management" ]; then
-    cp -r "${SOURCE_DIR}/skill-email-management" "${BUILD_DIR}/"
-    echo -e "  ${GREEN}ok${NC} Email Management Expert Plugin included"
+# Step 5b: Copy Email Management Skill (optional)
+echo -e "\n${YELLOW}Step 5b: Copying Email Management Skill...${NC}"
+if [ -d "${SOURCE_DIR}/skills/email-management" ]; then
+    mkdir -p "${BUILD_DIR}/skills"
+    cp -r "${SOURCE_DIR}/skills/email-management" "${BUILD_DIR}/skills/"
+    echo -e "  ${GREEN}ok${NC} Email Management Expert Skill included"
 else
-    echo -e "  ${YELLOW}--${NC} Plugin directory not found (optional, skipping)"
+    echo -e "  ${YELLOW}--${NC} Skill directory not found (optional, skipping)"
 fi
 
 # Step 5c: Copy UI Module (optional)
@@ -117,7 +118,7 @@ echo -e "\n${YELLOW}Step 7: Creating README...${NC}"
 cat > "${BUILD_DIR}/README.md" << 'EOF'
 # Apple Mail MCP Server
 
-Natural language interface for Apple Mail with 37 email management tools.
+Natural language interface for Apple Mail with 38 email management tools.
 
 ## Quick Installation
 
@@ -126,16 +127,14 @@ Natural language interface for Apple Mail with 37 email management tools.
 2. Grant permissions when prompted for Mail.app access
 3. Restart Claude Desktop
 
-### Install Email Management Plugin (Optional)
-The plugin teaches Claude intelligent email workflows:
+### Install Email Management Skill (Optional)
+The bundled skill teaches Claude intelligent email workflows:
 
 ```bash
-claude plugin add skill-email-management
+cp -r skills/email-management ~/.claude/skills/email-management
 ```
 
-Or manually copy `skill-email-management/` from this bundle to `~/.claude/skills/email-management`
-
-## Tools (37)
+## Tools (38)
 
 ### Inbox & Discovery (7)
 - **get_inbox_overview** - Comprehensive inbox status across all accounts
@@ -146,8 +145,9 @@ Or manually copy `skill-email-management/` from this bundle to `~/.claude/skills
 - **list_mailboxes** - Folder hierarchy with message counts
 - **inbox_dashboard** - Structured dashboard with per-account metrics
 
-### Search (8)
-- **search_emails** - Advanced multi-criteria search (subject, sender, date, attachments, status)
+### Search (9)
+- **search_emails_advanced** - Primary IMAP-first search with recipient filters, pagination, and flag filters
+- **search_emails** - Advanced multi-criteria search (subject, sender, date, attachments, status, flag color)
 - **get_email_with_content** - Subject search with content preview
 - **search_by_sender** - All emails from a specific sender
 - **get_recent_from_sender** - Recent emails from sender with time filters
@@ -162,12 +162,24 @@ Or manually copy `skill-email-management/` from this bundle to `~/.claude/skills
 - **forward_email** - Forward with optional message
 - **manage_drafts** - List/create/send/delete drafts
 
-### Manage & Organize (5)
-- **move_email** - Move emails by subject keyword (safety limit: 1)
-- **bulk_move_emails** - Batch move with higher limits
-- **update_email_status** - Mark read/unread, flag/unflag
+### Manage & Organize (7)
+- **move_email** - Move emails by subject keyword or exact message IDs (safety limit: 1)
+- **create_mailbox** - Create a mailbox or nested mailbox path
+- **archive_emails** - Move filtered emails to Archive with dry-run safety
+- **update_email_status** - Mark read/unread, flag/unflag with optional flag colors and exact message IDs
 - **save_email_attachment** - Download attachment to disk
 - **manage_trash** - Soft delete, permanent delete, empty trash
+- **synchronize_account** - Ask Mail to synchronize one account or all accounts
+
+### Bulk Operations (3)
+- **mark_emails** - Batch mark emails read/unread/flagged/unflagged
+- **delete_emails** - Batch move emails to Trash with dry-run safety
+- **bulk_move_emails** - Batch move with higher limits
+
+### Smart Inbox (3)
+- **get_awaiting_reply** - Find sent messages awaiting a response
+- **get_needs_response** - Find unread messages likely needing a reply
+- **get_top_senders** - Rank senders by message volume
 
 ### IMAP Sorting (2)
 - **sort_inbox** - Rule-based inbox sorting via IMAP (Proton Bridge)
@@ -192,7 +204,7 @@ Enable Read-Only Mode in Claude Desktop MCP settings to hide send-capable tools 
 ## Requirements
 
 - macOS with Apple Mail configured
-- Python 3.13+
+- Python 3.14+
 - uv package manager (https://docs.astral.sh/uv/)
 - Mail app with at least one account configured
 

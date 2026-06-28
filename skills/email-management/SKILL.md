@@ -1,11 +1,11 @@
 ---
 name: email-management
-description: Expert email management assistant for Apple Mail MCP. Use when the user mentions inbox management, email organisation, email triage, inbox zero, organising emails, managing mail folders, email productivity, checking emails, sorting inbox, bulk email moves, IMAP sorting, cross-account moves, recipient search, email workflow optimisation, or managing newsletters. Provides intelligent workflows and best practices for all 37 Apple Mail MCP tools with IMAP-first search acceleration.
+description: Expert email management assistant for Apple Mail MCP. Use when the user mentions inbox management, email organisation, email triage, inbox zero, organising emails, managing mail folders, email productivity, checking emails, sorting inbox, bulk email moves, IMAP sorting, cross-account moves, recipient search, email workflow optimisation, or managing newsletters. Provides intelligent workflows and best practices for all 38 Apple Mail MCP tools with IMAP-first search acceleration.
 ---
 
 # Email Management Expert
 
-You are an expert email management assistant with deep knowledge of productivity workflows and the Apple Mail MCP server (37 tools across 8 modules, with IMAP-first search acceleration).
+You are an expert email management assistant with deep knowledge of productivity workflows and the Apple Mail MCP server (38 tools across 8 modules, with IMAP-first search acceleration).
 
 ## Core Principles
 
@@ -16,7 +16,7 @@ You are an expert email management assistant with deep knowledge of productivity
 5. **User Preferences** — Check tool docstrings for injected `USER_EMAIL_PREFERENCES` before acting.
 6. **Progressive Actions** — Search first, review results, then act. Never bulk-delete without confirmation.
 
-## Tool Reference (37 tools, 8 modules)
+## Tool Reference (38 tools, 8 modules)
 
 ### Inbox & Discovery (7 tools)
 
@@ -37,7 +37,7 @@ All search tools try IMAP first when the account has IMAP config. Falls back to 
 | Tool | Purpose |
 |------|---------|
 | `search_emails_advanced(account, to_contains, cc_contains, sender_contains, subject_contains, body_contains, date_from, date_to, is_read, has_attachments, is_flagged, offset, ...)` | **Primary search** — all filters, IMAP-first, pagination, recipient filtering |
-| `search_emails(account, subject_keyword, sender, ...)` | Multi-criteria search (subject, sender, date, attachments, read status) |
+| `search_emails(account, subject_keyword, sender, flag_color, ...)` | Multi-criteria search (subject, sender, date, attachments, read status, flag color) |
 | `get_email_with_content(account, subject_keyword, ...)` | Quick subject search with content preview |
 | `search_by_sender(account, sender, ...)` | Find all emails from a specific sender |
 | `get_recent_from_sender(account, sender, ...)` | Recent emails from a sender with content |
@@ -55,16 +55,17 @@ All search tools try IMAP first when the account has IMAP config. Falls back to 
 | `forward_email(account, subject_keyword, to, message, mailbox, cc, bcc)` | Forward with optional message |
 | `manage_drafts(account, action, ...)` | List/create/send/delete drafts |
 
-### Manage & Organise (6 tools)
+### Manage & Organise (7 tools)
 
 | Tool | Purpose |
 |------|---------|
-| `move_email(account, subject_keyword, to_mailbox, ...)` | Move emails by subject/sender (default max: 1) |
+| `move_email(account, subject_keyword, to_mailbox, message_ids, ...)` | Move emails by subject or exact message IDs (default max: 1) |
 | `create_mailbox(account, mailbox_name)` | Create new mailbox/folder |
 | `archive_emails(account, ...)` | Move emails to Archive folder |
-| `update_email_status(account, action, ...)` | Mark read/unread, flag/unflag (default max: 10) |
+| `update_email_status(account, action, message_ids, flag_color, ...)` | Mark read/unread, flag/unflag, including exact IDs and flag colors (default max: 10) |
 | `save_email_attachment(account, subject_keyword, attachment_name, save_path)` | Download attachment to disk |
 | `manage_trash(account, action, ...)` | Move to trash, delete permanently, or empty trash |
+| `synchronize_account(account)` | Ask Mail to synchronize one account or all accounts |
 
 ### Bulk Operations (3 tools)
 
@@ -127,6 +128,18 @@ search_emails_advanced(account="proton", sender_contains="github", max_results=2
 search_emails_advanced(account="proton", sender_contains="github", max_results=20, offset=20)
 ```
 
+### Exact Message Actions
+```
+move_email(account="Work", subject_keyword=None, to_mailbox="Archive", message_ids=["101", "202"])
+update_email_status(account="Work", action="flag", message_ids=["101"], flag_color="orange")
+```
+
+### Account Synchronization
+```
+synchronize_account(account="Work")
+synchronize_account()
+```
+
 ### Cross-Account IMAP Move
 For moving emails between accounts (e.g. Proton → Stalwart), use the standalone script:
 ```bash
@@ -164,6 +177,8 @@ See [references/](references/) for detailed search patterns and workflow templat
 - `move_email` defaults to `max_moves=1` — increase intentionally
 - `manage_trash` defaults to `max_deletes=5` — review before increasing
 - `update_email_status` defaults to `max_updates=10`
+- Prefer `message_ids` when acting on search results that include exact Apple Mail IDs
+- Use `flag_color` only with `update_email_status(action="flag")`
 - Always search first, then act on results
 - Export important mailboxes before bulk deletion
 - `manage_trash(action="empty_trash")` is irreversible — confirm with user

@@ -757,10 +757,11 @@ def inbox_dashboard() -> Any:
         UIResource with uri "ui://apple-mail/inbox-dashboard" containing
         an interactive HTML dashboard, or error message if UI is unavailable.
     """
-    from apple_mail_mcp import UI_AVAILABLE
+    from apple_mail_mcp import UI_AVAILABLE, UI_UNAVAILABLE_REASON
 
     if not UI_AVAILABLE:
-        return "Error: UI module not available. Please install mcp-ui-server package."
+        reason = f" ({UI_UNAVAILABLE_REASON})" if UI_UNAVAILABLE_REASON else ""
+        return f"Error: Dashboard UI is not packaged in this build{reason}. The email analytics tools remain available."
 
     from apple_mail_mcp.tools.inbox import get_unread_count
     from ui import create_inbox_dashboard_ui
