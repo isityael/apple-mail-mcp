@@ -1,22 +1,22 @@
 [project]
 name = "apple-mail-mcp"
-version = "2.0.1"
+version = "2.0.2"
 description = "MCP server for managing Apple Mail"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
-    "fastmcp>=3.1.0",
+    "fastmcp>=3.4.2",
     "mcp-ui-server>=1.0.0",
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.4",
+    "ruff>=0.15.20",
 ]
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 120
 exclude = [".claude/"]
 
