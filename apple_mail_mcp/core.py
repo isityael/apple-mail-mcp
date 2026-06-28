@@ -1,9 +1,75 @@
 """Core helpers: AppleScript execution, escaping, parsing, and preference injection."""
 
+import atexit
+import re
+import signal
 import subprocess
+import threading
 from typing import Any
 
 from apple_mail_mcp.server import USER_PREFERENCES
+
+_inflight_children: set[subprocess.Popen[bytes]] = set()
+_inflight_lock = threading.Lock()
+_cleanup_registered = False
+_cleanup_lock = threading.Lock()
+
+
+def _kill_inflight_children() -> None:
+    """Kill any osascript children that outlive their caller."""
+    with _inflight_lock:
+        procs = list(_inflight_children)
+    for proc in procs:
+        try:
+            proc.kill()
+            proc.wait()
+        except Exception:
+            pass
+
+
+def _register_cleanup_once() -> None:
+    """Register process cleanup hooks once, without assuming main-thread import."""
+    global _cleanup_registered
+    with _cleanup_lock:
+        if _cleanup_registered:
+            return
+        _cleanup_registered = True
+
+    atexit.register(_kill_inflight_children)
+
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        try:
+            old_handler = signal.getsignal(sig)
+
+            def _make_handler(old, signum_capture=sig):
+                def _handler(signum, frame):
+                    _kill_inflight_children()
+                    if callable(old) and old not in (signal.SIG_DFL, signal.SIG_IGN):
+                        old(signum, frame)
+
+                return _handler
+
+            signal.signal(sig, _make_handler(old_handler))
+        except ValueError, OSError:
+            pass
+
+
+def _popen_factory(*args, **kwargs) -> subprocess.Popen[bytes]:
+    """Thin wrapper around subprocess.Popen for tests."""
+    return subprocess.Popen(*args, **kwargs)
+
+
+_HANDLER_DEFINITION_RE = re.compile(r"^\s*(?:on|to)\s+(?!error\b)\w+", re.MULTILINE)
+
+
+def _apply_applescript_timeout(script: str, timeout: int) -> str:
+    """Wrap a script in an AppleScript timeout when it is legal to do so."""
+    if any(line.lstrip().startswith("use ") for line in script.splitlines()):
+        return script
+    if _HANDLER_DEFINITION_RE.search(script):
+        return script
+    inner = max(timeout - 5, 5)
+    return f"with timeout of {inner} seconds\n{script}\nend timeout"
 
 
 def inject_preferences(func):
@@ -29,6 +95,8 @@ def escape_applescript(value: str) -> str:
         .replace("\r", "\\n")
         .replace("\n", "\\n")
         .replace("\t", "\\t")
+        .replace("\u2028", "\\n")
+        .replace("\u2029", "\\n")
     )
 
 
@@ -66,15 +134,22 @@ def run_applescript(script: str, *, timeout: int = 30) -> str:
         timeout: Maximum seconds to wait (default 30). Pass higher values
                  for known-heavy operations (content search, bulk, export).
     """
+    _register_cleanup_once()
+    wrapped_script = _apply_applescript_timeout(script, timeout)
+    proc = _popen_factory(
+        ["osascript", "-"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    with _inflight_lock:
+        _inflight_children.add(proc)
+
     try:
-        result = subprocess.run(["osascript", "-"], input=script.encode("utf-8"), capture_output=True, timeout=timeout)
-        if result.returncode != 0:
-            stderr = result.stderr.decode("utf-8", errors="replace").strip()
-            if stderr:
-                raise Exception(f"AppleScript error: {stderr}")
-        output = result.stdout.decode("utf-8", errors="replace").strip()
-        return _sanitize_for_json(output)
+        stdout, stderr = proc.communicate(input=wrapped_script.encode("utf-8"), timeout=timeout)
     except subprocess.TimeoutExpired as e:
+        proc.kill()
+        proc.wait()
         raise Exception(
             f"AppleScript execution timed out after {timeout}s. "
             "The mailbox may be very large or Mail.app may be busy syncing. "
@@ -82,6 +157,36 @@ def run_applescript(script: str, *, timeout: int = 30) -> str:
         ) from e
     except Exception as e:
         raise Exception(f"AppleScript execution failed: {str(e)}") from e
+    finally:
+        with _inflight_lock:
+            _inflight_children.discard(proc)
+
+    if proc.returncode != 0:
+        stderr_text = stderr.decode("utf-8", errors="replace").strip()
+        if stderr_text:
+            raise Exception(f"AppleScript error: {stderr_text}")
+
+    output = stdout.decode("utf-8", errors="replace").strip()
+    return _sanitize_for_json(output)
+
+
+def normalize_message_ids(message_ids: list[Any] | None) -> list[str]:
+    """Return de-duplicated numeric Apple Mail ids as strings."""
+    if not message_ids:
+        return []
+    normalized: list[str] = []
+    for value in message_ids:
+        value_text = str(value).strip()
+        if value_text and value_text.isdigit() and value_text not in normalized:
+            normalized.append(value_text)
+    return normalized
+
+
+def equals_any_numeric_condition(field_name: str, values: list[str]) -> str:
+    """Return AppleScript OR conditions for numeric equality matches."""
+    if not values:
+        return "false"
+    return "(" + " or ".join(f"{field_name} is {value}" for value in values) + ")"
 
 
 def parse_email_list(output: str) -> list[dict[str, Any]]:
@@ -132,15 +237,35 @@ LOWERCASE_HANDLER = """
     end lowercase
 """
 
+INBOX_NAMES = [
+    "INBOX",
+    "Inbox",
+    "Boîte de réception",
+    "Boîte aux lettres",
+    "Réception",
+    "Posteingang",
+    "Bandeja de entrada",
+    "Posta in arrivo",
+    "Caixa de entrada",
+    "Postvak IN",
+    "受信トレイ",
+]
+
 
 def inbox_mailbox_script(var_name: str = "inboxMailbox", account_var: str = "anAccount") -> str:
-    """Return AppleScript snippet to get inbox mailbox with INBOX/Inbox fallback."""
+    """Return AppleScript snippet to get inbox mailbox with localized fallbacks."""
+    name_list = ", ".join(f'"{n}"' for n in INBOX_NAMES)
     return f"""
-                try
-                    set {var_name} to mailbox "INBOX" of {account_var}
-                on error
-                    set {var_name} to mailbox "Inbox" of {account_var}
-                end try"""
+                set {var_name} to missing value
+                repeat with __inboxLookupName in {{{name_list}}}
+                    try
+                        set {var_name} to mailbox (__inboxLookupName as string) of {account_var}
+                        exit repeat
+                    end try
+                end repeat
+                if {var_name} is missing value then
+                    error "No inbox mailbox found for account " & (name of {account_var})
+                end if"""
 
 
 def content_preview_script(max_length: int, output_var: str = "outputText") -> str:
@@ -227,6 +352,27 @@ def skip_folders_condition(var_name: str = "mailboxName") -> str:
     return f"{var_name} is not in {{{folder_list}}}"
 
 
+def resolve_flag_color(flag_color: str) -> int:
+    """Map a human flag color name to Apple Mail's flag index."""
+    from apple_mail_mcp.constants import FLAG_COLORS
+
+    flag_index = FLAG_COLORS.get(flag_color.strip().lower())
+    if flag_index is None:
+        valid = ", ".join(color for color in FLAG_COLORS if color != "grey")
+        raise ValueError(f"Invalid flag_color '{flag_color}'. Use: {valid}")
+    return flag_index
+
+
+def read_flag_index_script(var_name: str = "messageFlagIndex") -> str:
+    """Return AppleScript snippet reading a message's active flag index."""
+    return f"""set {var_name} to -1
+                                    try
+                                        if flagged status of aMessage then
+                                            set {var_name} to flag index of aMessage
+                                        end if
+                                    end try"""
+
+
 def build_mailbox_ref(
     mailbox: str,
     account_var: str = "targetAccount",
@@ -251,6 +397,19 @@ def build_mailbox_ref(
             ref += f'mailbox "{escape_applescript(parts[i])}" of '
         ref += account_var
         return f"set {var_name} to {ref}"
+
+    if mailbox.upper() == "INBOX":
+        name_list = ", ".join(f'"{n}"' for n in INBOX_NAMES)
+        return f"""set {var_name} to missing value
+            repeat with __mailboxLookupName in {{{name_list}}}
+                try
+                    set {var_name} to mailbox (__mailboxLookupName as string) of {account_var}
+                    exit repeat
+                end try
+            end repeat
+            if {var_name} is missing value then
+                error "Mailbox not found: {escaped} (no localized inbox match)"
+            end if"""
 
     return f'''try
                 set {var_name} to mailbox "{escaped}" of {account_var}

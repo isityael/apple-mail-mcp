@@ -21,12 +21,15 @@ steps:
     commands:
       - uv sync --frozen
       - uv run python -c "import apple_mail_mcp"
-      - uv run python tests/test_runtime_features.py
+      - |
+        for t in tests/test_*.py; do
+          uv run python "$t"
+        done
       - |
         uv run python << 'PYEOF'
         from apple_mail_mcp import mcp
         n = len(mcp._tool_manager._tools)
-        assert n == 37, "Expected 37 tools, got %d" % n
+        assert n == 38, "Expected 38 tools, got %d" % n
         print("OK: %d tools registered" % n)
         PYEOF
 
@@ -67,7 +70,7 @@ steps:
       - bash apple-mail-mcpb/build-mcpb.sh
       - |
         n=$(jq '.tools | length' apple-mail-mcpb/manifest.json)
-        [ "$n" -eq 37 ] || { echo "ERROR: Expected 37 tools, got $n"; exit 1; }
+        [ "$n" -eq 38 ] || { echo "ERROR: Expected 38 tools, got $n"; exit 1; }
         echo "OK: $n tools in manifest"
       - |
         if [ -n "${CI_COMMIT_TAG}" ]; then

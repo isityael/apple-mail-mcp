@@ -1,7 +1,7 @@
 # Apple Mail MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
 [![GitHub stars](https://img.shields.io/github/stars/patrickfreyer/apple-mail-mcp?style=social)](https://github.com/patrickfreyer/apple-mail-mcp/stargazers)
 
@@ -13,7 +13,7 @@ An MCP server that gives AI assistants full access to Apple Mail -- read, search
 
 ## Quick Start
 
-**Prerequisites:** macOS with Apple Mail configured, Python 3.13+, `uv`
+**Prerequisites:** macOS with Apple Mail configured, Python 3.14+, `uv`
 
 ```bash
 git clone https://github.com/yaelmoshi/apple-mail-mcp.git
@@ -38,7 +38,22 @@ Restart Claude Desktop and grant Mail.app permissions when prompted.
 
 > **Tip:** An `.mcpb` bundle is also available on the [Releases](https://github.com/yaelmoshi/apple-mail-mcp/releases) page for one-click install in Claude Desktop.
 
-## Tools (37)
+## Codex Plugin
+
+This repository is also a Codex plugin source. The Codex plugin manifest lives at [`.codex-plugin/plugin.json`](/Users/yaelmeya/git/m0sh1.cc/apple-mail-mcp/.codex-plugin/plugin.json), bundles the Email Management skill from [`skills/`](/Users/yaelmeya/git/m0sh1.cc/apple-mail-mcp/skills), and exposes the Apple Mail MCP server through [`.mcp.json`](/Users/yaelmeya/git/m0sh1.cc/apple-mail-mcp/.mcp.json).
+
+The bundled MCP server is local-only and macOS-specific. It launches [`start_mcp.sh`](/Users/yaelmeya/git/m0sh1.cc/apple-mail-mcp/start_mcp.sh), which uses the repo-local `uv` environment and requires Mail.app Automation permissions on the machine running Codex.
+
+Forwarded optional environment variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `USER_EMAIL_PREFERENCES` | Adds user workflow preferences to tool descriptions |
+| `APPLE_MAIL_MCP_READ_ONLY` | Hides send-capable tools and blocks draft sending |
+
+Claude Desktop support remains separate: use the `.mcpb` bundle or explicit MCP config below.
+
+## Tools (38)
 
 ### Reading & Search
 | Tool | Description |
@@ -50,7 +65,7 @@ Restart Claude Desktop and grant Mail.app permissions when prompted.
 | `list_accounts` | List all configured Mail accounts |
 | `get_recent_emails` | Recent emails from a specific account |
 | `get_recent_from_sender` | Recent emails from a sender with time-range filters |
-| `search_emails` | Advanced multi-criteria search (subject, sender, dates, attachments) |
+| `search_emails` | Advanced multi-criteria search (subject, sender, dates, attachments, flag color) |
 | `search_by_sender` | Find all emails from a specific sender |
 | `search_email_content` | Full-text search in email bodies |
 | `search_all_accounts` | Cross-account unified search |
@@ -61,9 +76,10 @@ Restart Claude Desktop and grant Mail.app permissions when prompted.
 | Tool | Description |
 |------|-------------|
 | `list_mailboxes` | Folder hierarchy with message counts |
-| `move_email` | Move emails between folders (supports nested paths) |
-| `update_email_status` | Batch mark read/unread, flag/unflag |
+| `move_email` | Move emails between folders (supports nested paths and exact message IDs) |
+| `update_email_status` | Batch mark read/unread, flag/unflag with optional flag colors |
 | `manage_trash` | Soft delete, permanent delete, empty trash |
+| `synchronize_account` | Ask Mail to synchronize one account or all accounts |
 
 ### Composition
 | Tool | Description |
@@ -165,18 +181,18 @@ Show me email statistics for the last 30 days
 
 ## Email Management Skill
 
-A companion [Claude Code Skill](skill-email-management/) is included that teaches Claude expert email workflows (Inbox Zero, daily triage, folder organization). Install it alongside the MCP for intelligent, multi-step email management:
+A companion Email Management skill is included at [`skills/email-management/`](/Users/yaelmeya/git/m0sh1.cc/apple-mail-mcp/skills/email-management) for inbox zero, daily triage, folder organization, flag-color workflows, exact message-id moves, and account synchronization. Codex loads it through the plugin manifest. Claude Code users can install it alongside the MCP manually:
 
 ```bash
-cp -r skill-email-management ~/.claude/skills/email-management
+cp -r skills/email-management ~/.claude/skills/email-management
 ```
 
-See [skill-email-management/README.md](skill-email-management/README.md) for details.
+See [`skills/email-management/SKILL.md`](/Users/yaelmeya/git/m0sh1.cc/apple-mail-mcp/skills/email-management/SKILL.md) for details.
 
 ## Requirements
 
 - macOS with Apple Mail configured
-- Python 3.13+
+- Python 3.14+
 - `fastmcp` (+ optional `mcp-ui-server` for dashboard)
 - Claude Desktop or any MCP-compatible client
 - Mail.app permissions: Automation + Mail Data Access (grant in **System Settings > Privacy & Security > Automation**)
@@ -200,7 +216,9 @@ apple-mail-mcp/
 ├── uv.lock                    # Locked dependencies
 ├── apple_mail_mcp/            # MCP package and tool modules
 ├── apple-mail-mcpb/           # MCP Bundle build files
-├── skill-email-management/    # Email Management Expert Skill
+├── .codex-plugin/             # Codex plugin manifest
+├── .mcp.json                  # Codex-bundled MCP server config
+├── skills/email-management/   # Email Management Expert Skill
 ├── CHANGELOG.md
 ├── LICENSE
 └── README.md

@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import tempfile
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -26,12 +27,14 @@ def test_legacy_single_account_config():
 
         old_cfg = imap.CONFIG_FILE
         imap.CONFIG_FILE = cfg_path
+        imap.clear_config_cache()
         try:
             config = imap.get_imap_config()
             assert config["user"] == "me@proton.me"
             assert config["port"] == 1143
         finally:
             imap.CONFIG_FILE = old_cfg
+            imap.clear_config_cache()
 
 
 def test_multi_account_config():
@@ -50,6 +53,7 @@ def test_multi_account_config():
 
         old_cfg = imap.CONFIG_FILE
         imap.CONFIG_FILE = cfg_path
+        imap.clear_config_cache()
         try:
             # get_account_config by exact name
             cfg = imap.get_account_config("proton")
@@ -71,6 +75,7 @@ def test_multi_account_config():
             assert imap.has_imap_config("Gmail") is False
         finally:
             imap.CONFIG_FILE = old_cfg
+            imap.clear_config_cache()
 
 
 def test_legacy_get_imap_config_uses_first_account():
@@ -89,23 +94,27 @@ def test_legacy_get_imap_config_uses_first_account():
 
         old_cfg = imap.CONFIG_FILE
         imap.CONFIG_FILE = cfg_path
+        imap.clear_config_cache()
         try:
             config = imap.get_imap_config()
             assert config["user"] == "u1"
             assert config["host"] == "h1"
         finally:
             imap.CONFIG_FILE = old_cfg
+            imap.clear_config_cache()
 
 
 def test_missing_config_file():
     """No config file returns None for account lookup."""
     old_cfg = imap.CONFIG_FILE
     imap.CONFIG_FILE = "/nonexistent/path/imap.json"
+    imap.clear_config_cache()
     try:
         assert imap.get_account_config("anything") is None
         assert imap.has_imap_config("anything") is False
     finally:
         imap.CONFIG_FILE = old_cfg
+        imap.clear_config_cache()
 
 
 def test_legacy_user_match():
@@ -116,6 +125,7 @@ def test_legacy_user_match():
 
         old_cfg = imap.CONFIG_FILE
         imap.CONFIG_FILE = cfg_path
+        imap.clear_config_cache()
         try:
             cfg = imap.get_account_config("me@proton.me")
             assert cfg is not None
@@ -125,3 +135,67 @@ def test_legacy_user_match():
             assert imap.get_account_config("other@gmail.com") is None
         finally:
             imap.CONFIG_FILE = old_cfg
+            imap.clear_config_cache()
+
+
+def test_config_file_cache_reuses_unchanged_file():
+    """Repeated config lookups avoid rereading unchanged config files."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cfg_path = os.path.join(tmpdir, "imap.json")
+        _write_config({"host": "127.0.0.1", "port": 1143, "user": "me@proton.me", "password": "pw"}, cfg_path)
+
+        old_cfg = imap.CONFIG_FILE
+        imap.CONFIG_FILE = cfg_path
+        imap.clear_config_cache()
+        try:
+            real_open = open
+            open_count = 0
+
+            def counting_open(*args, **kwargs):
+                nonlocal open_count
+                if args and args[0] == cfg_path:
+                    open_count += 1
+                return real_open(*args, **kwargs)
+
+            with patch("builtins.open", counting_open):
+                assert imap.get_imap_config()["user"] == "me@proton.me"
+                assert imap.get_imap_config()["user"] == "me@proton.me"
+            assert open_count == 1
+        finally:
+            imap.CONFIG_FILE = old_cfg
+            imap.clear_config_cache()
+
+
+def test_config_file_cache_invalidates_on_mtime_change():
+    """Config cache reloads after file contents change."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cfg_path = os.path.join(tmpdir, "imap.json")
+        _write_config({"host": "127.0.0.1", "port": 1143, "user": "old@example.com", "password": "pw"}, cfg_path)
+
+        old_cfg = imap.CONFIG_FILE
+        imap.CONFIG_FILE = cfg_path
+        imap.clear_config_cache()
+        try:
+            assert imap.get_imap_config()["user"] == "old@example.com"
+            _write_config({"host": "127.0.0.1", "port": 1143, "user": "new@example.com", "password": "pw"}, cfg_path)
+            os.utime(cfg_path, None)
+            assert imap.get_imap_config()["user"] == "new@example.com"
+        finally:
+            imap.CONFIG_FILE = old_cfg
+            imap.clear_config_cache()
+
+
+if __name__ == "__main__":
+    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    passed = 0
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            passed += 1
+            print(f"  PASS  {t.__name__}")
+        except AssertionError as e:
+            failed += 1
+            print(f"  FAIL  {t.__name__}: {e}")
+    print(f"\n{passed} passed, {failed} failed")
+    sys.exit(1 if failed else 0)

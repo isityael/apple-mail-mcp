@@ -38,7 +38,36 @@ SKIP_FOLDERS = [
     "Deleted Messages",
     "All Mail",
     "All Messages",
+    "Corbeille",
+    "Courrier indésirable",
+    "Indésirables",
+    "Éléments supprimés",
+    "Éléments envoyés",
+    "Messages envoyés",
+    "Brouillons",
+    "Boîte d'envoi",
+    "Papierkorb",
+    "Gesendet",
+    "Entwürfe",
+    "Werbung",
+    "Papelera",
+    "Enviados",
+    "Borradores",
+    "Correo no deseado",
 ]
+
+FLAG_COLORS = {
+    "red": 0,
+    "orange": 1,
+    "yellow": 2,
+    "green": 3,
+    "blue": 4,
+    "purple": 5,
+    "gray": 6,
+    "grey": 6,
+}
+
+FLAG_COLOR_NAMES = {index: name for name, index in FLAG_COLORS.items() if name != "grey"}
 
 # Thread subject prefixes to strip when matching threads
 THREAD_PREFIXES = ["Re:", "Fwd:", "FW:", "RE:", "Fw:"]

@@ -13,16 +13,37 @@ SOCKET_TIMEOUT = 30  # seconds
 
 
 CONFIG_FILE = os.path.expanduser("~/.config/apple-mail-mcp/imap.json")
+_CONFIG_CACHE: dict[str, object] | None = None
+_CONFIG_CACHE_KEY: tuple[str, int | None, int | None] | None = None
+
+
+def clear_config_cache() -> None:
+    """Clear the IMAP config cache. Intended for tests and config reloads."""
+    global _CONFIG_CACHE, _CONFIG_CACHE_KEY
+    _CONFIG_CACHE = None
+    _CONFIG_CACHE_KEY = None
 
 
 def _load_config_file() -> dict:
-    """Load and cache the raw config file contents."""
+    """Load the raw config file contents with mtime-based invalidation."""
+    global _CONFIG_CACHE, _CONFIG_CACHE_KEY
     if not os.path.exists(CONFIG_FILE):
+        _CONFIG_CACHE = None
+        _CONFIG_CACHE_KEY = (CONFIG_FILE, None, None)
         return {}
+
+    stat = os.stat(CONFIG_FILE)
+    cache_key = (CONFIG_FILE, stat.st_mtime_ns, stat.st_size)
+    if _CONFIG_CACHE is not None and cache_key == _CONFIG_CACHE_KEY:
+        return dict(_CONFIG_CACHE)
+
     import json
 
     with open(CONFIG_FILE) as f:
-        return json.load(f)
+        data = json.load(f)
+    _CONFIG_CACHE = dict(data)
+    _CONFIG_CACHE_KEY = cache_key
+    return dict(data)
 
 
 def get_imap_config() -> dict:

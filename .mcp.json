@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "apple-mail": {
+      "command": "/bin/bash",
+      "args": [
+        "./start_mcp.sh"
+      ],
+      "cwd": ".",
+      "env_vars": [
+        "USER_EMAIL_PREFERENCES",
+        "APPLE_MAIL_MCP_READ_ONLY"
+      ],
+      "startup_timeout_sec": 45,
+      "tool_timeout_sec": 180
+    }
+  }
+}

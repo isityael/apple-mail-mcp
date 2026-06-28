@@ -6,8 +6,15 @@ import logging
 from typing import Any
 
 from apple_mail_mcp import imap as imap_backend
-from apple_mail_mcp.constants import SKIP_FOLDERS
-from apple_mail_mcp.core import LOWERCASE_HANDLER, escape_applescript, inject_preferences, run_applescript
+from apple_mail_mcp.constants import FLAG_COLOR_NAMES, SKIP_FOLDERS
+from apple_mail_mcp.core import (
+    LOWERCASE_HANDLER,
+    escape_applescript,
+    inject_preferences,
+    read_flag_index_script,
+    resolve_flag_color,
+    run_applescript,
+)
 from apple_mail_mcp.server import mcp
 
 _log = logging.getLogger("apple-mail-mcp.search")
@@ -87,6 +94,7 @@ def _try_imap_search(
         )
 
         all_results: list[dict[str, str]] = []
+        skipped = 0
 
         for folder in folders:
             try:
@@ -98,9 +106,14 @@ def _try_imap_search(
             if not uids:
                 continue
 
-            # Apply offset + limit
-            end = offset + max_results - len(all_results)
-            selected = uids[offset:end] if offset else uids[: max_results - len(all_results)]
+            if offset and skipped + len(uids) <= offset:
+                skipped += len(uids)
+                continue
+
+            folder_offset = max(offset - skipped, 0)
+            remaining = max_results - len(all_results)
+            selected = uids[folder_offset : folder_offset + remaining]
+            skipped += folder_offset
             if not selected:
                 continue
 
@@ -382,6 +395,7 @@ def search_emails(
     include_content: bool = False,
     max_results: int = 20,
     output_format: str = "text",
+    flag_color: str | None = None,
 ) -> str:
     """
     Unified search tool - search emails with advanced filtering across any mailbox.
@@ -398,10 +412,18 @@ def search_emails(
         include_content: Whether to include email content preview (slower)
         max_results: Maximum number of results to return (default: 20)
         output_format: "text" (default, human-readable) or "json" (structured list of email dicts)
+        flag_color: Optional flag color filter: red, orange, yellow, green, blue, purple, gray
 
     Returns:
         Formatted list of matching emails with all requested details
     """
+    flag_index: int | None = None
+    if flag_color is not None:
+        try:
+            flag_index = resolve_flag_color(flag_color)
+        except ValueError as exc:
+            return f"Error: {exc}"
+
     # --- IMAP fast path ---
     imap_results = _try_imap_search(
         account,
@@ -411,6 +433,7 @@ def search_emails(
         date_from=date_from,
         date_to=date_to,
         is_read=True if read_status == "read" else (False if read_status == "unread" else None),
+        is_flagged=True if flag_color else None,
         max_results=max_results,
         include_content=include_content,
     )
@@ -437,6 +460,9 @@ def search_emails(
         whose_conditions.append("read status is true")
     elif read_status == "unread":
         whose_conditions.append("read status is false")
+
+    if flag_index is not None:
+        whose_conditions.append(f"(flagged status is true and flag index is {flag_index})")
 
     # Build date objects programmatically (locale-independent)
     date_setup_script = ""
@@ -566,6 +592,7 @@ def search_emails(
                                     set messageSender to sender of aMessage
                                     set messageDate to date received of aMessage
                                     set messageRead to read status of aMessage
+                                    {read_flag_index_script()}
 
                                     set readIndicator to "\u2709"
                                     if messageRead then
@@ -576,6 +603,9 @@ def search_emails(
                                     set outputText to outputText & "   From: " & messageSender & return
                                     set outputText to outputText & "   Date: " & (messageDate as string) & return
                                     set outputText to outputText & "   Mailbox: " & mailboxName & return
+                                    if messageFlagIndex >= 0 then
+                                        set outputText to outputText & "   Flag: " & item (messageFlagIndex + 1) of {{"red", "orange", "yellow", "green", "blue", "purple", "gray"}} & return
+                                    end if
 
                                     {content_script}
 
@@ -614,6 +644,7 @@ def search_emails(
             has_attachments,
             read_status,
             max_results,
+            flag_color,
         )
 
     return result
@@ -627,6 +658,7 @@ def _search_emails_json(
     has_attachments: bool | None,
     read_status: str,
     max_results: int,
+    flag_color: str | None = None,
 ) -> str:
     """Return search results as JSON."""
     escaped_account = escape_applescript(account)
@@ -648,6 +680,13 @@ def _search_emails_json(
         conditions.append("messageRead is true")
     elif read_status == "unread":
         conditions.append("messageRead is false")
+    flag_index: int | None = None
+    if flag_color is not None:
+        try:
+            flag_index = resolve_flag_color(flag_color)
+        except ValueError as exc:
+            return json.dumps({"error": str(exc)}, indent=2)
+        conditions.append(f"(messageFlagIndex is {flag_index})")
     condition_str = " and ".join(conditions) if conditions else "true"
 
     if mailbox == "All":
@@ -696,8 +735,9 @@ def _search_emails_json(
                                 set messageSender to sender of aMessage
                                 set messageDate to date received of aMessage
                                 set messageRead to read status of aMessage
+                                {read_flag_index_script()}
                                 if {condition_str} then
-                                    set end of resultLines to messageSubject & "|||" & messageSender & "|||" & (messageDate as string) & "|||" & messageRead & "|||" & "{escaped_account}" & "|||" & mailboxName
+                                    set end of resultLines to messageSubject & "|||" & messageSender & "|||" & (messageDate as string) & "|||" & messageRead & "|||" & "{escaped_account}" & "|||" & mailboxName & "|||" & messageFlagIndex
                                     set resultCount to resultCount + 1
                                 end if
                             end try
@@ -730,6 +770,13 @@ def _search_emails_json(
                         "mailbox": parts[5].strip() if len(parts) > 5 else "",
                     }
                 )
+                if len(parts) > 6:
+                    try:
+                        flag_index_value = int(parts[6].strip())
+                    except ValueError:
+                        flag_index_value = -1
+                    if flag_index_value in FLAG_COLOR_NAMES:
+                        emails[-1]["flag_color"] = FLAG_COLOR_NAMES[flag_index_value]
     return json.dumps(emails, indent=2)
 
 

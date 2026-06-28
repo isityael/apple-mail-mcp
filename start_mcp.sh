@@ -29,6 +29,13 @@ fi
 # Sync dependencies (creates venv if needed)
 log_error "Syncing dependencies..."
 cd "${SCRIPT_DIR}"
+if [ -z "${UV_PYTHON:-}" ] && command -v mise &> /dev/null; then
+    UV_PYTHON="$(mise which python 2>/dev/null || true)"
+    if [ -n "${UV_PYTHON}" ]; then
+        export UV_PYTHON
+        log_error "Using Python: ${UV_PYTHON}"
+    fi
+fi
 "${UV_BIN}" sync --quiet 2>&1 | while read line; do log_error "$line"; done
 
 EXTRA_ARGS=()

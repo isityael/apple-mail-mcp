@@ -1,13 +1,59 @@
 """Composition tools: sending, replying, forwarding, and drafts."""
 
 import os
-import subprocess
+import re
 import tempfile
 
 import apple_mail_mcp.server as server
 from apple_mail_mcp.core import escape_applescript, inbox_mailbox_script, inject_preferences, run_applescript
 
 mcp = server.mcp
+
+_CDATA_BLOCK_PATTERN = re.compile(r"<!\[CDATA\[(.*?)\]\]>", re.DOTALL)
+
+
+def _strip_cdata_wrappers(text: str) -> str:
+    """Remove XML CDATA section wrappers from user-provided body content."""
+    if not text:
+        return text
+    text = _CDATA_BLOCK_PATTERN.sub(r"\1", text)
+    return text.replace("<![CDATA[", "").replace("]]>", "")
+
+
+def _quoted_posix_path(path: str) -> str:
+    """Return an AppleScript expression for a safely quoted POSIX path."""
+    return f'quoted form of "{escape_applescript(path)}"'
+
+
+def _html_to_pasteboard_script(html_temp_path: str, pb_var: str = "pb", old_clip_var: str = "oldClip") -> str:
+    """Load HTML and write rendered RTF plus text fallback to NSPasteboard."""
+    quoted_path = _quoted_posix_path(html_temp_path)
+    return f"""set htmlString to do shell script "cat " & {quoted_path}
+set {pb_var} to current application's NSPasteboard's generalPasteboard()
+set {old_clip_var} to {pb_var}'s stringForType:(current application's NSPasteboardTypeString)
+set htmlNSStr to current application's NSString's stringWithString:htmlString
+set htmlBytes to htmlNSStr's dataUsingEncoding:(current application's NSUTF8StringEncoding)
+set htmlOpts to current application's NSDictionary's dictionaryWithObject:(current application's NSHTMLTextDocumentType) forKey:(current application's NSDocumentTypeDocumentAttribute)
+set attrStr to current application's NSAttributedString's alloc()'s initWithData:htmlBytes options:htmlOpts documentAttributes:(missing value) |error|:(missing value)
+{pb_var}'s clearContents()
+if attrStr is not missing value then
+    set attrRange to current application's NSMakeRange(0, attrStr's |length|())
+    set rtfData to attrStr's RTFFromRange:attrRange documentAttributes:(current application's NSDictionary's dictionary())
+    {pb_var}'s setData:rtfData forType:(current application's NSPasteboardTypeRTF)
+    {pb_var}'s setString:(attrStr's |string|()) forType:(current application's NSPasteboardTypeString)
+else
+    {pb_var}'s setString:htmlString forType:(current application's NSPasteboardTypeString)
+end if"""
+
+
+def _compose_sender_script(variable: str, account_ref: str) -> str:
+    """Pin sender when the account has a single configured email alias."""
+    return (
+        f"set emailAddrs to email addresses of {account_ref}\n"
+        f"if (count of emailAddrs) is 1 then\n"
+        f"    set sender of {variable} to item 1 of emailAddrs\n"
+        f"end if"
+    )
 
 
 def _validate_attachment_paths(attachments: str) -> tuple[list[str], str | None]:
@@ -78,6 +124,7 @@ def _send_html_email(
     """Send an HTML-formatted email using clipboard HTML injection."""
     safe_account = escape_applescript(account)
     escaped_subject = escape_applescript(subject)
+    body_html = _strip_cdata_wrappers(body_html)
 
     to_lines = ""
     for addr in [a.strip() for a in to.split(",") if a.strip()]:
@@ -126,29 +173,30 @@ def _send_html_email(
         tmp.write(body_html)
         html_temp_path = tmp.name
 
+    if attachments_script.strip():
+        attachments_block = f"""
+tell application "Mail"
+    tell newMsg
+        {attachments_script}
+    end tell
+end tell"""
+    else:
+        attachments_block = "-- (no attachments)"
+
     script = f'''
 use framework "Foundation"
 use framework "AppKit"
 use scripting additions
 
-set htmlString to do shell script "cat '{html_temp_path}'"
-set pb to current application's NSPasteboard's generalPasteboard()
-set oldClip to pb's stringForType:(current application's NSPasteboardTypeString)
-
-pb's clearContents()
-set htmlData to (current application's NSString's stringWithString:htmlString)'s dataUsingEncoding:(current application's NSUTF8StringEncoding)
-pb's setData:htmlData forType:(current application's NSPasteboardTypeHTML)
+{_html_to_pasteboard_script(html_temp_path)}
 
 tell application "Mail"
     set newMsg to make new outgoing message with properties {{subject:"{escaped_subject}", content:"", visible:true}}
-    set emailAddrs to email addresses of account "{safe_account}"
-    set senderAddress to item 1 of emailAddrs
-    set sender of newMsg to senderAddress
+    {_compose_sender_script("newMsg", f'account "{safe_account}"')}
     tell newMsg
         {to_lines}
         {cc_lines}
         {bcc_lines}
-        {attachments_script}
     end tell
     activate
 end tell
@@ -156,7 +204,14 @@ end tell
 delay 2.5
 
 tell application "System Events"
-    set frontmost of process "Mail" to true
+    set focusWaited to 0
+    repeat until (frontmost of process "Mail") or (focusWaited is greater than or equal to 40)
+        try
+            set frontmost of process "Mail" to true
+        end try
+        delay 0.1
+        set focusWaited to focusWaited + 1
+    end repeat
     delay 0.5
     tell process "Mail"
         repeat 7 times
@@ -172,7 +227,7 @@ tell application "System Events"
     end tell
 end tell
 
-do shell script "rm -f '{html_temp_path}'"
+{attachments_block}
 
 if oldClip is not missing value then
     pb's clearContents()
@@ -183,25 +238,15 @@ return "{success_text}"
 '''
 
     try:
-        result = subprocess.run(
-            ["osascript", "-"],
-            input=script.encode("utf-8"),
-            capture_output=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            stderr = result.stderr.decode("utf-8", errors="replace").strip()
-            return f"Error sending HTML email: {stderr}"
-
-        output = result.stdout.decode("utf-8", errors="replace").strip()
+        output = run_applescript(script, timeout=30)
         confirm = f"{output}\n\nFrom: {account}\nTo: {to}\nSubject: {subject}"
         if cc:
             confirm += f"\nCC: {cc}"
         if bcc:
             confirm += f"\nBCC: {bcc}"
         return confirm
-    except subprocess.TimeoutExpired:
-        return "Error: HTML email script timed out"
+    except Exception as exc:
+        return f"Error sending HTML email: {exc}"
     finally:
         if os.path.exists(html_temp_path):
             os.unlink(html_temp_path)
@@ -486,7 +531,7 @@ def compose_email(
             account=account,
             to=to,
             subject=subject,
-            body_html=body_html,
+            body_html=_strip_cdata_wrappers(body_html),
             cc=cc,
             bcc=bcc,
             attachments_script=attachment_script,
