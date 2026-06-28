@@ -25,11 +25,11 @@ if ! command -v uv >/dev/null 2>&1; then
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
 
-echo "[codex] Ensuring Python 3.13 is available"
-uv python install 3.13
+echo "[codex] Ensuring Python 3.14 is available"
+uv python install 3.14
 
 echo "[codex] Syncing locked dependencies"
-uv sync --frozen --python 3.13
+uv sync --frozen --python 3.14
 
 echo "[codex] Verifying import surface"
 uv run python -c "import apple_mail_mcp"
@@ -39,7 +39,7 @@ uv run python - <<'PY'
 from apple_mail_mcp import mcp
 
 n = len(mcp._tool_manager._tools)
-assert n == 37, f"Expected 37 tools, got {n}"
+assert n == 38, f"Expected 38 tools, got {n}"
 print(f"OK: {n} tools registered")
 PY
 
@@ -83,11 +83,11 @@ if ! command -v uv >/dev/null 2>&1; then
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
 
-echo "[codex] Ensuring Python 3.13 is available"
-uv python install 3.13
+echo "[codex] Ensuring Python 3.14 is available"
+uv python install 3.14
 
 echo "[codex] Syncing locked dependencies"
-uv sync --frozen --python 3.13
+uv sync --frozen --python 3.14
 
 echo "[codex] Verifying import surface"
 uv run python -c "import apple_mail_mcp"
@@ -97,7 +97,7 @@ uv run python - <<'PY'
 from apple_mail_mcp import mcp
 
 n = len(mcp._tool_manager._tools)
-assert n == 37, f"Expected 37 tools, got {n}"
+assert n == 38, f"Expected 38 tools, got {n}"
 print(f"OK: {n} tools registered")
 PY
 

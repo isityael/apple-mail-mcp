@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$CLAUDE_FILE_PATH\" | grep -q '\\.py$'; then cd /Users/smeya/git/apple-mail-mcp && uv run ruff format --quiet \"$CLAUDE_FILE_PATH\" 2>/dev/null; uv run ruff check --fix --quiet \"$CLAUDE_FILE_PATH\" 2>/dev/null; fi"
+            "command": "if echo \"$CLAUDE_FILE_PATH\" | grep -q '\\.py$'; then cd \"${CLAUDE_PROJECT_DIR:-/Users/yaelmeya/git/m0sh1.cc/apple-mail-mcp}\" && uv run ruff format --quiet \"$CLAUDE_FILE_PATH\" 2>/dev/null; uv run ruff check --fix --quiet \"$CLAUDE_FILE_PATH\" 2>/dev/null; fi"
           }
         ]
       }
