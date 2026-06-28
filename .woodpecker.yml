@@ -138,25 +138,25 @@ steps:
     commands:
       - apk add --no-cache -X https://dl-cdn.alpinelinux.org/alpine/v3.23/community curl github-cli jq
       - |
-        export GH_TOKEN="${GITHUB_TOKEN}"
-        VERSION="${CI_COMMIT_TAG#v}"
-        TARBALL_URL="https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz"
-        echo "Fetching SHA256 for ${TARBALL_URL}..."
+        export GH_TOKEN="$GITHUB_TOKEN"
+        VERSION="$(echo "$CI_COMMIT_TAG" | sed 's/^v//')"
+        TARBALL_URL="https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/$CI_COMMIT_TAG.tar.gz"
+        echo "Fetching SHA256 for $TARBALL_URL..."
         SHA256=$(curl -sL "$TARBALL_URL" | sha256sum | cut -d' ' -f1)
-        echo "Version=${VERSION} SHA256=${SHA256}"
+        echo "Version=$VERSION SHA256=$SHA256"
 
         TAP_REPO="yaelmoshi/tap"
         FILE_PATH="Formula/apple-mail-mcp.rb"
 
         # Fetch current file content and SHA
-        FILE_DATA=$(gh api "repos/${TAP_REPO}/contents/${FILE_PATH}" --jq '{sha: .sha, content: .content}')
+        FILE_DATA=$(gh api "repos/$TAP_REPO/contents/$FILE_PATH" --jq '{sha: .sha, content: .content}')
         FILE_SHA=$(echo "$FILE_DATA" | jq -r .sha)
         CONTENT=$(echo "$FILE_DATA" | jq -r .content | base64 -d)
 
         # Update URL and SHA256 in formula
         UPDATED=$(echo "$CONTENT" \
-          | sed "s|url \"https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/${CI_COMMIT_TAG}.tar.gz\"|" \
-          | sed "s|sha256 \"[a-f0-9]\{64\}\"|sha256 \"${SHA256}\"|")
+          | sed "s|url \"https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/yaelmoshi/apple-mail-mcp/archive/refs/tags/$CI_COMMIT_TAG.tar.gz\"|" \
+          | sed "s|sha256 \"[a-f0-9]\{64\}\"|sha256 \"$SHA256\"|")
 
         # Skip if no changes
         if [ "$CONTENT" = "$UPDATED" ]; then
@@ -166,10 +166,10 @@ steps:
 
         # Commit via GitHub API
         ENCODED=$(echo "$UPDATED" | base64 | tr -d '\n')
-        gh api "repos/${TAP_REPO}/contents/${FILE_PATH}" \
+        gh api "repos/$TAP_REPO/contents/$FILE_PATH" \
           --method PUT \
-          --field message="chore(apple-mail-mcp): bump to ${VERSION}" \
+          --field message="chore(apple-mail-mcp): bump to $VERSION" \
           --field content="$ENCODED" \
           --field sha="$FILE_SHA" \
           --field committer='{"name":"Woodpecker CI","email":"ci@m0sh1.cc"}'
-        echo "Updated ${FILE_PATH} to ${VERSION}"
+        echo "Updated $FILE_PATH to $VERSION"
