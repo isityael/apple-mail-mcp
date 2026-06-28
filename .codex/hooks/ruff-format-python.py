@@ -2,11 +2,9 @@
 """Run ruff formatting/checks for Python files after Codex writes."""
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
-
 
 PROJECT_ROOT = Path("/Users/yaelmeya/git/m0sh1.cc/apple-mail-mcp")
 
