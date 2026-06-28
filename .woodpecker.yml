@@ -166,10 +166,18 @@ steps:
 
         # Commit via GitHub API
         ENCODED=$(echo "$UPDATED" | base64 | tr -d '\n')
-        gh api "repos/$TAP_REPO/contents/$FILE_PATH" \
-          --method PUT \
-          --field message="chore(apple-mail-mcp): bump to $VERSION" \
-          --field content="$ENCODED" \
-          --field sha="$FILE_SHA" \
-          --field committer='{"name":"Woodpecker CI","email":"ci@m0sh1.cc"}'
+        jq -n \
+          --arg message "chore(apple-mail-mcp): bump to $VERSION" \
+          --arg content "$ENCODED" \
+          --arg sha "$FILE_SHA" \
+          '{
+            message: $message,
+            content: $content,
+            sha: $sha,
+            committer: {
+              name: "Woodpecker CI",
+              email: "ci@m0sh1.cc"
+            }
+          }' \
+          | gh api "repos/$TAP_REPO/contents/$FILE_PATH" --method PUT --input -
         echo "Updated $FILE_PATH to $VERSION"
