@@ -3,11 +3,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
-[![GitHub stars](https://img.shields.io/github/stars/patrickfreyer/apple-mail-mcp?style=social)](https://github.com/patrickfreyer/apple-mail-mcp/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/yaelmoshi/apple-mail-mcp?style=social)](https://github.com/yaelmoshi/apple-mail-mcp/stargazers)
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=patrickfreyer/apple-mail-mcp&type=Date)](https://star-history.com/#patrickfreyer/apple-mail-mcp&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=yaelmoshi/apple-mail-mcp&type=Date)](https://star-history.com/#yaelmoshi/apple-mail-mcp&Date)
 
 An MCP server that gives AI assistants full access to Apple Mail -- read, search, compose, organize, and analyze emails via natural language. Built with [FastMCP](https://github.com/jlowin/fastmcp).
 
@@ -238,7 +238,7 @@ MIT -- see [LICENSE](LICENSE).
 ## Links
 
 - [Changelog](CHANGELOG.md)
-- [Issues](https://github.com/patrickfreyer/apple-mail-mcp/issues)
-- [Discussions](https://github.com/patrickfreyer/apple-mail-mcp/discussions)
+- [Issues](https://github.com/yaelmoshi/apple-mail-mcp/issues)
+- [Discussions](https://github.com/yaelmoshi/apple-mail-mcp/discussions)
 - [FastMCP](https://github.com/jlowin/fastmcp)
 - [Model Context Protocol](https://modelcontextprotocol.io)

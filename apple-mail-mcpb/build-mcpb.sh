@@ -109,6 +109,21 @@ else
     echo -e "  ${YELLOW}--${NC} UI directory not found (optional, skipping)"
 fi
 
+if [ "${VERSION}" != "${MANIFEST_VERSION}" ]; then
+    echo -e "\n${YELLOW}Step 5d: Rewriting package version metadata...${NC}"
+    for version_file in \
+        "${BUILD_DIR}/pyproject.toml" \
+        "${BUILD_DIR}/uv.lock" \
+        "${BUILD_DIR}/apple_mail_mcp/__init__.py"
+    do
+        if [ -f "${version_file}" ]; then
+            sed -i.bak "s/${MANIFEST_VERSION}/${VERSION}/g" "${version_file}"
+            rm -f "${version_file}.bak"
+            echo -e "  ${GREEN}ok${NC} ${version_file#${BUILD_DIR}/}"
+        fi
+    done
+fi
+
 # Note: Virtual environment will be created on user's machine during first run
 echo -e "\n${YELLOW}Step 6: Skipping venv creation (will be created on user's machine)...${NC}"
 echo -e "  ${GREEN}ok${NC} Venv will be initialized automatically on first run via uv sync"

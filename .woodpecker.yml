@@ -21,6 +21,9 @@ steps:
     commands:
       - uv sync --frozen
       - uv run python -c "import apple_mail_mcp"
+      - uv run python scripts/check_versions.py
+      - uv run python scripts/check_mcpb_manifest.py
+      - uv run python scripts/check_codex_plugin_export.py
       - |
         for t in tests/test_*.py; do
           uv run python "$t"
@@ -61,7 +64,7 @@ steps:
       - lint
       - check
     commands:
-      - apk add --no-cache bash zip jq
+      - apk add --no-cache bash zip unzip jq
       - |
         if [ -n "${CI_COMMIT_TAG}" ]; then
           export APPLE_MAIL_MCP_VERSION="${CI_COMMIT_TAG#v}"
@@ -76,6 +79,11 @@ steps:
         if [ -n "${CI_COMMIT_TAG}" ]; then
           MCPB="apple-mail-mcp-${CI_COMMIT_TAG}.mcpb"
           test -f "$MCPB" || { echo "Missing tagged build artifact: $MCPB"; exit 1; }
+          VERSION="${CI_COMMIT_TAG#v}"
+          unzip -p "$MCPB" manifest.json | jq -e --arg v "$VERSION" '.version == $v'
+          unzip -p "$MCPB" pyproject.toml | grep -F "version = \"$VERSION\""
+          unzip -p "$MCPB" uv.lock | grep -F "version = \"$VERSION\""
+          unzip -p "$MCPB" apple_mail_mcp/__init__.py | grep -F "__version__ = \"$VERSION\""
           sha256sum "$MCPB" > "$MCPB.sha256"
         else
           echo "Non-tag build: skipping release asset checksum generation"
@@ -98,9 +106,25 @@ steps:
         test -f "$MCPB" || { echo "Missing: $MCPB"; exit 1; }
         test -f "$MCPB.sha256" || { echo "Missing: $MCPB.sha256"; exit 1; }
         REPO="yaelmoshi/apple-mail-mcp"
-        # semantic-release creates a draft release; upload assets then publish
-        gh release upload "${CI_COMMIT_TAG}" "$MCPB" "$MCPB.sha256" --repo "$REPO" --clobber
-        gh release edit "${CI_COMMIT_TAG}" --repo "$REPO" --draft=false
+
+        assets="$(gh release view "${CI_COMMIT_TAG}" --repo "$REPO" --json assets --jq '.assets[].name' || true)"
+        has_mcpb=false
+        has_sha=false
+        echo "$assets" | grep -Fx "$MCPB" >/dev/null && has_mcpb=true
+        echo "$assets" | grep -Fx "$MCPB.sha256" >/dev/null && has_sha=true
+
+        if [ "$has_mcpb" = true ] && [ "$has_sha" = true ]; then
+          echo "Release assets already present; skipping upload"
+        else
+          gh release upload "${CI_COMMIT_TAG}" "$MCPB" "$MCPB.sha256" --repo "$REPO"
+        fi
+
+        is_draft="$(gh release view "${CI_COMMIT_TAG}" --repo "$REPO" --json isDraft --jq '.isDraft')"
+        if [ "$is_draft" = "true" ]; then
+          gh release edit "${CI_COMMIT_TAG}" --repo "$REPO" --draft=false
+        else
+          echo "Release is already published"
+        fi
 
   - name: update-homebrew
     image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
