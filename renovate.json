@@ -25,6 +25,13 @@
       "addLabels": ["docker"]
     },
     {
+      "description": "DHI Node Alpine CI images: compare Alpine rebases while keeping the dev variant",
+      "matchManagers": ["woodpecker"],
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["dhi.io/node"],
+      "versioning": "regex:^(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-alpine(?<build>\\d+\\.\\d+))?-(?<compatibility>dev)$"
+    },
+    {
       "description": "Group semantic-release tooling",
       "matchPackageNames": ["/semantic-release/"],
       "groupName": "semantic-release"
