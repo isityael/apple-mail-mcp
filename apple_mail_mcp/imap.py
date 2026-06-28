@@ -275,7 +275,7 @@ def move_message(imap: imaplib.IMAP4, uid: bytes, destination: str, *, timeout: 
             return False
         imap.uid("store", uid, "+FLAGS", r"(\Deleted)")
         return True
-    except (TimeoutError, OSError):
+    except TimeoutError, OSError:
         return False
     finally:
         imap.socket().settimeout(old_timeout)
