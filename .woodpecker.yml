@@ -6,7 +6,7 @@ when:
 
 steps:
   - name: lint
-    image: dhi.io/uv:0.11.19-debian13-dev@sha256:a5a2aca09637cf08ac2ec5758f389c45465c9816bd9beb45e5a2eb5f082b275b
+    image: dhi.io/uv:0.11.25-debian13-dev@sha256:dee156d073d020d4d78e184f0f5a3f3f383c5c9db2d52e974c1bee4f0f6c94dd
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
     commands:
@@ -15,7 +15,7 @@ steps:
       - uv run ruff format --check .
 
   - name: check
-    image: dhi.io/uv:0.11.19-debian13-dev@sha256:a5a2aca09637cf08ac2ec5758f389c45465c9816bd9beb45e5a2eb5f082b275b
+    image: dhi.io/uv:0.11.25-debian13-dev@sha256:dee156d073d020d4d78e184f0f5a3f3f383c5c9db2d52e974c1bee4f0f6c94dd
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
     commands:
@@ -53,7 +53,7 @@ steps:
       - npx semantic-release
 
   - name: build-mcpb
-    image: dhi.io/alpine-base:3.23-dev@sha256:8e77884b4e74639e217160cd7dd8af957d23b44a59392b117e4da6ca8c2e2c6e
+    image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
     depends_on:
       - lint
       - check
@@ -79,7 +79,7 @@ steps:
         fi
 
   - name: github-release
-    image: dhi.io/alpine-base:3.23-dev@sha256:8e77884b4e74639e217160cd7dd8af957d23b44a59392b117e4da6ca8c2e2c6e
+    image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
     depends_on:
       - build-mcpb
     when:
@@ -100,7 +100,7 @@ steps:
         gh release edit "${CI_COMMIT_TAG}" --repo "$REPO" --draft=false
 
   - name: update-homebrew
-    image: dhi.io/alpine-base:3.23-dev@sha256:8e77884b4e74639e217160cd7dd8af957d23b44a59392b117e4da6ca8c2e2c6e
+    image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
     depends_on:
       - github-release
     when:
