@@ -41,7 +41,7 @@ def apply_read_only_mode(mcp: Any, read_only: bool) -> None:
                 mcp.remove_tool(name)
             else:
                 _fallback_remove_tool(mcp, name)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             continue
 
 
