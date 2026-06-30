@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
-[![GitHub stars](https://img.shields.io/github/stars/yaelmoshi/apple-mail-mcp?style=social)](https://github.com/yaelmoshi/apple-mail-mcp/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/yaelmoshi/apple-mail-mcp?style=social)](https://github.com/isityael/apple-mail-mcp/stargazers)
 
 ## Star History
 
@@ -16,7 +16,7 @@ An MCP server that gives AI assistants full access to Apple Mail -- read, search
 **Prerequisites:** macOS with Apple Mail configured, Python 3.14+, `uv`
 
 ```bash
-git clone https://github.com/yaelmoshi/apple-mail-mcp.git
+git clone https://github.com/isityael/apple-mail-mcp.git
 cd apple-mail-mcp
 uv sync
 ```
@@ -36,7 +36,7 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 Restart Claude Desktop and grant Mail.app permissions when prompted.
 
-> **Tip:** An `.mcpb` bundle is also available on the [Releases](https://github.com/yaelmoshi/apple-mail-mcp/releases) page for one-click install in Claude Desktop.
+> **Tip:** An `.mcpb` bundle is also available on the [Releases](https://github.com/isityael/apple-mail-mcp/releases) page for one-click install in Claude Desktop.
 
 ## Codex Plugin
 
@@ -238,7 +238,7 @@ MIT -- see [LICENSE](LICENSE).
 ## Links
 
 - [Changelog](CHANGELOG.md)
-- [Issues](https://github.com/yaelmoshi/apple-mail-mcp/issues)
-- [Discussions](https://github.com/yaelmoshi/apple-mail-mcp/discussions)
+- [Issues](https://github.com/isityael/apple-mail-mcp/issues)
+- [Discussions](https://github.com/isityael/apple-mail-mcp/discussions)
 - [FastMCP](https://github.com/jlowin/fastmcp)
 - [Model Context Protocol](https://modelcontextprotocol.io)
