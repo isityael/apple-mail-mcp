@@ -7,12 +7,12 @@
     "name": "yaelmoshi"
   },
   "license": "MIT",
-  "homepage": "https://github.com/yaelmoshi/apple-mail-mcp",
+  "homepage": "https://github.com/isityael/apple-mail-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yaelmoshi/apple-mail-mcp.git"
+    "url": "https://github.com/isityael/apple-mail-mcp.git"
   },
-  "documentation": "https://github.com/yaelmoshi/apple-mail-mcp#readme",
+  "documentation": "https://github.com/isityael/apple-mail-mcp#readme",
   "user_config": {
     "user_preferences": {
       "type": "string",
