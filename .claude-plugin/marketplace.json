@@ -1,7 +1,7 @@
 {
   "name": "apple-mail-mcp",
   "owner": {
-    "name": "yaelmoshi"
+    "name": "isityael"
   },
   "plugins": [
     {
@@ -9,7 +9,7 @@
       "description": "IMAP-first email management for Apple Mail — search, compose, triage, organise, and analyse email with 38 MCP tools, IMAP acceleration, cross-account moves, account sync, and an expert email management skill",
       "category": "productivity",
       "source": "./",
-      "homepage": "https://github.com/yaelmoshi/apple-mail-mcp"
+      "homepage": "https://github.com/isityael/apple-mail-mcp"
     }
   ]
 }

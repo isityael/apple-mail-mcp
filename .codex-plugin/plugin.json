@@ -1,12 +1,12 @@
 {
   "name": "apple-mail",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Local macOS Apple Mail MCP workflows with 38 tools, IMAP acceleration, account sync, and email management skills.",
   "author": {
-    "name": "yaelmoshi"
+    "name": "isityael"
   },
-  "homepage": "https://github.com/yaelmoshi/apple-mail-mcp",
-  "repository": "https://github.com/yaelmoshi/apple-mail-mcp",
+  "homepage": "https://github.com/isityael/apple-mail-mcp",
+  "repository": "https://github.com/isityael/apple-mail-mcp",
   "license": "MIT",
   "keywords": [
     "apple-mail",
@@ -21,7 +21,7 @@
     "displayName": "Apple Mail MCP",
     "shortDescription": "Manage local Apple Mail through MCP tools.",
     "longDescription": "Apple Mail MCP is a local macOS plugin that gives Codex access to Apple Mail workflows through a bundled STDIO MCP server. It supports inbox triage, search, compose, folder management, IMAP-accelerated operations, account sync, analytics, and reusable email management skills. It requires Apple Mail, local Automation permissions, uv, and Python 3.14.",
-    "developerName": "yaelmoshi",
+    "developerName": "isityael",
     "category": "Productivity",
     "capabilities": [
       "MCP",
@@ -29,7 +29,7 @@
       "Email",
       "Write"
     ],
-    "websiteURL": "https://github.com/yaelmoshi/apple-mail-mcp",
+    "websiteURL": "https://github.com/isityael/apple-mail-mcp",
     "defaultPrompt": [
       "Summarize my Apple Mail inbox.",
       "Triage unread Apple Mail messages.",

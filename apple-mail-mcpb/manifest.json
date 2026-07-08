@@ -1,10 +1,10 @@
 {
   "dxt_version": "0.1",
   "name": "Apple Mail MCP",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "IMAP-first email management for Apple Mail with 38 tools — IMAP-accelerated search with recipient filtering, cross-account moves, HTML/plain-text composition, bulk operations, smart inbox analytics, folder management, IMAP sorting, account sync, and optional read-only mode.",
   "author": {
-    "name": "yaelmoshi"
+    "name": "isityael"
   },
   "license": "MIT",
   "homepage": "https://github.com/isityael/apple-mail-mcp",
@@ -197,5 +197,5 @@
       "description": "Move emails between IMAP folders directly. Fast bulk move for Proton Bridge — useful for folder merging, inbox triage, and sender-based filtering."
     }
   ],
-  "prompts": []
+  "prompts": [ ]
 }
