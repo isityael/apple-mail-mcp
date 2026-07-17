@@ -45,17 +45,19 @@ steps:
       - event: push
         branch: main
     environment:
-      GITHUB_TOKEN:
-        from_secret: github_token
-      GH_TOKEN:
-        from_secret: github_token
+      GITEA_TOKEN:
+        from_secret: forgejo_token
+      GITEA_URL: "https://git.m0sh1.cc"
     commands:
       - apk add --no-cache git
       - git config user.name "woodpecker[bot]"
       - git config user.email "woodpecker@m0sh1.cc"
-      - git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/isityael/apple-mail-mcp.git"
+      - git config credential.helper "store --file=/tmp/forgejo-git-credentials"
+      - trap 'rm -f /tmp/forgejo-git-credentials' EXIT
+      - 'printf "protocol=https\nhost=git.m0sh1.cc\nusername=woodpecker\npassword=%s\n\n" "$GITEA_TOKEN" | git credential approve'
+      - git remote set-url origin "https://git.m0sh1.cc/isityael/apple-mail-mcp.git"
       - git fetch --tags origin
-      - npm ci
+      - npm ci --ignore-scripts
       - npx semantic-release
 
   - name: build-mcpb
@@ -89,47 +91,52 @@ steps:
           echo "Non-tag build: skipping release asset checksum generation"
         fi
 
-  - name: github-release
+  - name: forgejo-release-assets
     image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
     depends_on:
       - build-mcpb
     when:
       - event: tag
     environment:
-      GITHUB_TOKEN:
-        from_secret: github_token
+      GITEA_TOKEN:
+        from_secret: forgejo_token
     commands:
-      - apk add --no-cache -X https://dl-cdn.alpinelinux.org/alpine/v3.24/community git github-cli
+      - apk add --no-cache curl jq
       - |
-        export GH_TOKEN="${GITHUB_TOKEN}"
         MCPB="apple-mail-mcp-${CI_COMMIT_TAG}.mcpb"
         test -f "$MCPB" || { echo "Missing: $MCPB"; exit 1; }
         test -f "$MCPB.sha256" || { echo "Missing: $MCPB.sha256"; exit 1; }
-        REPO="isityael/apple-mail-mcp"
+        API="https://git.m0sh1.cc/api/v1/repos/isityael/apple-mail-mcp"
 
-        assets="$(gh release view "${CI_COMMIT_TAG}" --repo "$REPO" --json assets --jq '.assets[].name' || true)"
-        has_mcpb=false
-        has_sha=false
-        echo "$assets" | grep -Fx "$MCPB" >/dev/null && has_mcpb=true
-        echo "$assets" | grep -Fx "$MCPB.sha256" >/dev/null && has_sha=true
+        RELEASE=""
+        for ATTEMPT in 1 2 3 4 5 6; do
+          if RELEASE="$(curl -fsS -H "Authorization: token $GITEA_TOKEN" "$API/releases/tags/$CI_COMMIT_TAG")"; then
+            break
+          fi
+          echo "Release not available yet (attempt $ATTEMPT/6)"
+          sleep 5
+        done
+        test -n "$RELEASE" || { echo "Release $CI_COMMIT_TAG was not created"; exit 1; }
+        RELEASE_ID="$(echo "$RELEASE" | jq -er '.id')"
+        ASSETS="$(echo "$RELEASE" | jq -r '.assets[].name')"
 
-        if [ "$has_mcpb" = true ] && [ "$has_sha" = true ]; then
-          echo "Release assets already present; skipping upload"
-        else
-          gh release upload "${CI_COMMIT_TAG}" "$MCPB" "$MCPB.sha256" --repo "$REPO"
-        fi
-
-        is_draft="$(gh release view "${CI_COMMIT_TAG}" --repo "$REPO" --json isDraft --jq '.isDraft')"
-        if [ "$is_draft" = "true" ]; then
-          gh release edit "${CI_COMMIT_TAG}" --repo "$REPO" --draft=false
-        else
-          echo "Release is already published"
-        fi
+        for ASSET in "$MCPB" "$MCPB.sha256"; do
+          if echo "$ASSETS" | grep -Fx "$ASSET" >/dev/null; then
+            echo "$ASSET already uploaded; skipping"
+            continue
+          fi
+          curl -fsS \
+            -H "Authorization: token $GITEA_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@$ASSET" \
+            "$API/releases/$RELEASE_ID/assets?name=$ASSET" >/dev/null
+          echo "Uploaded $ASSET"
+        done
 
   - name: update-homebrew
     image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
     depends_on:
-      - github-release
+      - forgejo-release-assets
     when:
       - event: tag
     environment:
@@ -140,9 +147,12 @@ steps:
       - |
         export GH_TOKEN="$GITHUB_TOKEN"
         VERSION="$(echo "$CI_COMMIT_TAG" | sed 's/^v//')"
-        TARBALL_URL="https://github.com/isityael/apple-mail-mcp/archive/refs/tags/$CI_COMMIT_TAG.tar.gz"
+        TARBALL_URL="https://git.m0sh1.cc/isityael/apple-mail-mcp/archive/$CI_COMMIT_TAG.tar.gz"
         echo "Fetching SHA256 for $TARBALL_URL..."
-        SHA256=$(curl -sL "$TARBALL_URL" | sha256sum | cut -d' ' -f1)
+        ARCHIVE="$(mktemp)"
+        curl -fsSL -o "$ARCHIVE" "$TARBALL_URL"
+        SHA256=$(sha256sum "$ARCHIVE" | cut -d' ' -f1)
+        rm -f "$ARCHIVE"
         echo "Version=$VERSION SHA256=$SHA256"
 
         TAP_REPO="isityael/tap"
@@ -155,7 +165,7 @@ steps:
 
         # Update URL and SHA256 in formula
         UPDATED=$(echo "$CONTENT" \
-          | sed "s|url \"https://github.com/isityael/apple-mail-mcp/archive/refs/tags/v.*\.tar\.gz\"|url \"https://github.com/isityael/apple-mail-mcp/archive/refs/tags/$CI_COMMIT_TAG.tar.gz\"|" \
+          | sed "s|url \"https://git.m0sh1.cc/isityael/apple-mail-mcp/archive/v.*\.tar\.gz\"|url \"$TARBALL_URL\"|" \
           | sed "s|sha256 \"[a-f0-9]\{64\}\"|sha256 \"$SHA256\"|")
 
         # Skip if no changes
