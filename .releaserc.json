@@ -1,16 +1,9 @@
 {
-  "repositoryUrl": "https://github.com/isityael/apple-mail-mcp.git",
+  "repositoryUrl": "https://git.m0sh1.cc/isityael/apple-mail-mcp.git",
   "branches": [ "main" ],
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
-    [
-      "@semantic-release/github",
-      {
-        "successComment": false,
-        "failComment": false,
-        "draftRelease": true
-      }
-    ]
+    "@forge-for-gitea/semantic-release-gitea"
   ]
 }
