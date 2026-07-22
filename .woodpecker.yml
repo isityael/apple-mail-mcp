@@ -6,7 +6,7 @@ when:
 
 steps:
   - name: lint
-    image: dhi.io/uv:0.11.30-debian13-dev@sha256:6fff0bb059d06fe2a4c929fec775e251c918af8725d26567dd9e09a5ea0050fd
+    image: dhi.io/uv:0.11.30-debian13-dev@sha256:6d640a7e83f6875043930d015c5bc1f62f510947422cd20f212ed68e7bb487ab
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
     commands:
@@ -15,7 +15,7 @@ steps:
       - uv run ruff format --check .
 
   - name: check
-    image: dhi.io/uv:0.11.30-debian13-dev@sha256:6fff0bb059d06fe2a4c929fec775e251c918af8725d26567dd9e09a5ea0050fd
+    image: dhi.io/uv:0.11.30-debian13-dev@sha256:6d640a7e83f6875043930d015c5bc1f62f510947422cd20f212ed68e7bb487ab
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
     commands:
@@ -61,7 +61,7 @@ steps:
       - npx semantic-release
 
   - name: build-mcpb
-    image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
+    image: dhi.io/alpine-base:3.24-dev@sha256:62132f1b331ee573f8157bc575c0b8479f24dfe2e75238b3c49dde28ac50ec5b
     depends_on:
       - lint
       - check
@@ -92,7 +92,7 @@ steps:
         fi
 
   - name: forgejo-release-assets
-    image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
+    image: dhi.io/alpine-base:3.24-dev@sha256:62132f1b331ee573f8157bc575c0b8479f24dfe2e75238b3c49dde28ac50ec5b
     depends_on:
       - build-mcpb
     when:
@@ -134,7 +134,7 @@ steps:
         done
 
   - name: update-homebrew
-    image: dhi.io/alpine-base:3.24-dev@sha256:74230b37711de2e5cbc42b8fbd0bb019417ce99b05e5792390d75cb6c948a560
+    image: dhi.io/alpine-base:3.24-dev@sha256:62132f1b331ee573f8157bc575c0b8479f24dfe2e75238b3c49dde28ac50ec5b
     depends_on:
       - forgejo-release-assets
     when:
