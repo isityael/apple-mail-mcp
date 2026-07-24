@@ -2,7 +2,7 @@
   "name": "apple-mail-mcp-release",
   "private": true,
   "devDependencies": {
-    "semantic-release": "^25.0.5",
+    "semantic-release": "^25.0.8",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/release-notes-generator": "^14.1.1",
     "@forge-for-gitea/semantic-release-gitea": "1.2.0"
