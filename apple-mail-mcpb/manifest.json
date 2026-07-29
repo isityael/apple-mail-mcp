@@ -1,7 +1,7 @@
 {
   "dxt_version": "0.1",
   "name": "Apple Mail MCP",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "IMAP-first email management for Apple Mail with 38 tools — IMAP-accelerated search with recipient filtering, cross-account moves, HTML/plain-text composition, bulk operations, smart inbox analytics, folder management, IMAP sorting, account sync, and optional read-only mode.",
   "author": {
     "name": "isityael"
