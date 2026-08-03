@@ -25,13 +25,13 @@ def test_all_version_strings_agree():
 
 def test_all_version_strings_match_expected_env(monkeypatch=None):
     if monkeypatch is None:
-        os.environ["APPLE_MAIL_MCP_EXPECTED_VERSION"] = "2.6.1"
+        os.environ["APPLE_MAIL_MCP_EXPECTED_VERSION"] = "2.6.2"
         try:
             ok, versions = check_versions.check(_REPO_ROOT)
         finally:
             os.environ.pop("APPLE_MAIL_MCP_EXPECTED_VERSION", None)
     else:
-        monkeypatch.setenv("APPLE_MAIL_MCP_EXPECTED_VERSION", "2.6.1")
+        monkeypatch.setenv("APPLE_MAIL_MCP_EXPECTED_VERSION", "2.6.2")
         ok, versions = check_versions.check(_REPO_ROOT)
     assert ok, versions
 
@@ -39,7 +39,7 @@ def test_all_version_strings_match_expected_env(monkeypatch=None):
 def test_package_exposes_version():
     import apple_mail_mcp
 
-    assert apple_mail_mcp.__version__ == "2.6.1"
+    assert apple_mail_mcp.__version__ == "2.6.2"
 
 
 if __name__ == "__main__":
