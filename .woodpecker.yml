@@ -61,7 +61,7 @@ steps:
       - npx semantic-release
 
   - name: build-mcpb
-    image: dhi.io/alpine-base:3.24-dev@sha256:bc485a80d08683238c792a82331064d2cccafeb724d65a7b049a623db834b547
+    image: dhi.io/alpine-base:3.24-dev@sha256:d76c2c09e2c89e900dcd0eaef94ecd90e95a318af466c61488385bec10d84003
     depends_on:
       - lint
       - check
@@ -92,7 +92,7 @@ steps:
         fi
 
   - name: forgejo-release-assets
-    image: dhi.io/alpine-base:3.24-dev@sha256:bc485a80d08683238c792a82331064d2cccafeb724d65a7b049a623db834b547
+    image: dhi.io/alpine-base:3.24-dev@sha256:d76c2c09e2c89e900dcd0eaef94ecd90e95a318af466c61488385bec10d84003
     depends_on:
       - build-mcpb
     when:
@@ -134,7 +134,7 @@ steps:
         done
 
   - name: update-homebrew
-    image: dhi.io/alpine-base:3.24-dev@sha256:bc485a80d08683238c792a82331064d2cccafeb724d65a7b049a623db834b547
+    image: dhi.io/alpine-base:3.24-dev@sha256:d76c2c09e2c89e900dcd0eaef94ecd90e95a318af466c61488385bec10d84003
     depends_on:
       - forgejo-release-assets
     when:
