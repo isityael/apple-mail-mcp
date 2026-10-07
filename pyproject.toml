@@ -6,7 +6,8 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
-    "fastmcp>=3.4.4",
+    "fastmcp>=3.4.8,<4",
+    "mcp>=1.30.0,<2",
     "mcp-ui-server>=1.0.0",
 ]
 
