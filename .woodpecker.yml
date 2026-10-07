@@ -6,7 +6,7 @@ when:
 
 steps:
   - name: lint
-    image: dhi.io/uv:0.12.15-debian13-dev@sha256:410d16abd4cfcbbfe3dcb3878ffedd95121f37f16e698e220fc2c88c19310084
+    image: dhi.io/uv:0.12.23-debian13-dev@sha256:3bfb1b9e5b7afbbcffd9f8f9467c6cb57e1fd5e902275fded369a1c5f8a927bd
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
     commands:
@@ -15,7 +15,7 @@ steps:
       - uv run ruff format --check .
 
   - name: check
-    image: dhi.io/uv:0.12.15-debian13-dev@sha256:410d16abd4cfcbbfe3dcb3878ffedd95121f37f16e698e220fc2c88c19310084
+    image: dhi.io/uv:0.12.23-debian13-dev@sha256:3bfb1b9e5b7afbbcffd9f8f9467c6cb57e1fd5e902275fded369a1c5f8a927bd
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
     commands:
@@ -37,7 +37,7 @@ steps:
         PYEOF
 
   - name: release
-    image: dhi.io/node:26.4.0-alpine3.24-dev@sha256:6049c9bf9906b19c05596189887b19905471a0a88d555fc76db55ff23ee79a5a
+    image: dhi.io/node:26.10.0-alpine3.24-dev@sha256:8da859df5dc853c923ace53c4cfe994a909a28917f7fcfc8508869beab8cf132
     depends_on:
       - lint
       - check
