@@ -4,6 +4,10 @@ when:
     branch: main
   - event: tag
 
+labels:
+  location: root01
+  trust: external
+
 steps:
   - name: lint
     image: dhi.io/uv:0.13.5-debian13-dev
