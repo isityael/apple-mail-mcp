@@ -13,34 +13,81 @@
   ],
   "packageRules": [
     {
-      "matchManagers": ["pep621"],
-      "addLabels": ["python"]
+      "matchManagers": [
+        "pep621"
+      ],
+      "addLabels": [
+        "python"
+      ]
     },
     {
-      "matchManagers": ["npm"],
-      "addLabels": ["npm"]
+      "matchManagers": [
+        "npm"
+      ],
+      "addLabels": [
+        "npm"
+      ]
     },
     {
-      "matchManagers": ["woodpecker"],
-      "addLabels": ["docker"]
+      "matchManagers": [
+        "woodpecker"
+      ],
+      "addLabels": [
+        "docker"
+      ]
     },
     {
       "description": "DHI Node Alpine CI images: compare Alpine rebases while keeping the dev variant",
-      "matchManagers": ["woodpecker"],
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["dhi.io/node"],
+      "matchManagers": [
+        "woodpecker"
+      ],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "dhi.io/node"
+      ],
       "versioning": "regex:^(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-alpine(?<build>\\d+\\.\\d+))?-(?<compatibility>dev)$"
     },
     {
       "description": "Group semantic-release tooling",
-      "matchPackageNames": ["/semantic-release/"],
+      "matchPackageNames": [
+        "/semantic-release/"
+      ],
       "groupName": "semantic-release"
     },
     {
       "description": "Auto-merge patch and minor Python dependency updates",
-      "matchManagers": ["pep621"],
-      "matchUpdateTypes": ["patch", "minor"],
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor"
+      ],
       "automerge": true
+    },
+    {
+      "description": "Use container version tags only.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "pinDigests": false
+    },
+    {
+      "description": "Do not create container digest pins or digest refreshes.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "pinDigest"
+      ],
+      "enabled": false
     }
+  ],
+  "pinDigests": false,
+  "ignorePresets": [
+    "docker:pinDigests"
   ]
 }
