@@ -178,7 +178,10 @@ def test_config_file_cache_invalidates_on_mtime_change():
         try:
             assert imap.get_imap_config()["user"] == "old@example.com"
             _write_config({"host": "127.0.0.1", "port": 1143, "user": "new@example.com", "password": "pw"}, cfg_path)
-            os.utime(cfg_path, None)
+            # A rapid same-size rewrite can retain the same timestamp on ZFS.
+            # Advance mtime explicitly so this tests invalidation, not clock granularity.
+            previous = os.stat(cfg_path)
+            os.utime(cfg_path, ns=(previous.st_atime_ns, previous.st_mtime_ns + 1_000_000_000))
             assert imap.get_imap_config()["user"] == "new@example.com"
         finally:
             imap.CONFIG_FILE = old_cfg
