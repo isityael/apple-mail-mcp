@@ -7,8 +7,11 @@ when:
 steps:
   - name: lint
     image: dhi.io/uv:0.13.5-debian13-dev
+    volumes:
+      - woodpecker-pipeline-cache:/woodpecker/cache
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
+      UV_CACHE_DIR: /woodpecker/cache/apple-mail-mcp/uv
     commands:
       - uv sync --frozen
       - uv run ruff check .
@@ -16,8 +19,11 @@ steps:
 
   - name: check
     image: dhi.io/uv:0.13.5-debian13-dev
+    volumes:
+      - woodpecker-pipeline-cache:/woodpecker/cache
     environment:
       UV_PROJECT_ENVIRONMENT: /tmp/venv
+      UV_CACHE_DIR: /woodpecker/cache/apple-mail-mcp/uv
     commands:
       - uv sync --frozen
       - uv run python -c "import apple_mail_mcp"
