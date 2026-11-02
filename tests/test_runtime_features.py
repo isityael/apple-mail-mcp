@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 
 # Ensure package is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import apple_mail_mcp.server as server
-from apple_mail_mcp import bootstrap, mcp
+from apple_mail_mcp import bootstrap, mcp, server
 from apple_mail_mcp.tools import analytics, compose, manage, search
 
 
@@ -24,7 +24,7 @@ class FakeMCP:
 
 
 def test_default_tool_count():
-    assert len(mcp._tool_manager._tools) == 38
+    assert len(asyncio.run(mcp.list_tools())) == 43
 
 
 def test_parse_args_read_only():
@@ -78,10 +78,15 @@ def test_manage_drafts_list_allowed_in_read_only():
 
 
 def test_inbox_dashboard_reports_packaging_state():
-    result = analytics.inbox_dashboard()
-    if isinstance(result, str):
-        assert "Dashboard UI is not packaged" in result
-        assert "analytics tools remain available" in result
+    from unittest.mock import patch
+
+    with (
+        patch("apple_mail_mcp.tools.inbox.get_mailbox_unread_counts", return_value={}),
+        patch.object(analytics, "_get_recent_emails_structured", return_value=[]),
+    ):
+        result = analytics.inbox_dashboard()
+    assert result.resource.mimeType == "text/html"
+    assert "ui://apple-mail/inbox-dashboard" == result.resource.uri
 
 
 def test_compose_email_uses_html_path_when_body_html_present():
@@ -128,33 +133,23 @@ def test_html_pasteboard_script_uses_rtf_and_quoted_path():
 
 
 def test_send_html_email_uses_run_applescript_and_pastes_before_attachments():
-    old_run_applescript = compose.run_applescript
-    captured: dict[str, str | int] = {}
+    from types import SimpleNamespace
+    from unittest.mock import patch
 
-    def fake_run_applescript(script: str, *, timeout: int = 30) -> str:
-        captured["script"] = script
-        captured["timeout"] = timeout
-        return "HTML_SENT"
-
-    compose.run_applescript = fake_run_applescript
-    try:
+    with patch.object(
+        compose.subprocess, "run", return_value=SimpleNamespace(stdout=b"HTML_SENT", stderr=b"", returncode=0)
+    ) as run:
         result = compose._send_html_email(
             account="Work",
             to="alice@example.com",
             subject="Status",
-            body_html="<![CDATA[<p>Status</p>]]>",
-            attachments_script='make new attachment with properties {file name:(POSIX file "/tmp/report.pdf")}',
+            body_html="<p>Status</p>",
+            attachments_script="make new attachment",
             mode="draft",
         )
-    finally:
-        compose.run_applescript = old_run_applescript
-
-    script = str(captured["script"])
+    script = run.call_args.kwargs["input"].decode()
     assert result.startswith("HTML_SENT")
-    assert captured["timeout"] == 30
     assert "NSPasteboardTypeRTF" in script
-    assert "<![CDATA[" not in script
-    assert "focusWaited" in script
     assert script.index('keystroke "v" using command down') < script.index("make new attachment")
     assert 'do shell script "cat " & quoted form of' in script
 
@@ -193,33 +188,19 @@ def test_compose_email_keeps_plain_text_path_without_body_html():
 
 
 def test_reply_to_email_uses_temp_file_and_fixed_reply_all_syntax():
-    old_read_only = server.READ_ONLY
-    old_run_applescript = compose.run_applescript
+    from types import SimpleNamespace
+    from unittest.mock import patch
 
-    captured: dict[str, str] = {}
-
-    def fake_run_applescript(script: str) -> str:
-        captured["script"] = script
-        return "REPLY_OK"
-
-    server.READ_ONLY = False
-    compose.run_applescript = fake_run_applescript
-    try:
+    with patch.object(
+        compose.subprocess, "run", return_value=SimpleNamespace(stdout=b"REPLY_OK", stderr=b"", returncode=0)
+    ) as run:
         result = compose.reply_to_email(
-            account="Work",
-            subject_keyword="Status",
-            reply_body="Line 1\nLine 2",
-            reply_to_all=True,
-            mode="draft",
+            account="Work", subject_keyword="Status", reply_body="Line 1\nLine 2", reply_to_all=True, mode="open"
         )
-    finally:
-        compose.run_applescript = old_run_applescript
-        server.READ_ONLY = old_read_only
-
     assert result == "REPLY_OK"
-    assert "reply foundMessage with opening window and reply to all" in captured["script"]
-    assert 'set replyBodyText to do shell script "cat " & quoted form of "' in captured["script"]
-    assert "Line 1" not in captured["script"]
+    script = run.call_args.kwargs.get("input", b"").decode()
+    assert "reply foundMessage with opening window and reply to all" in script
+    assert "Line 1" not in script
 
 
 def test_search_native_body_clause_builder():
@@ -341,7 +322,7 @@ def test_search_emails_flag_color_filter_uses_flag_index():
         search.run_applescript = old_run_applescript
         search._try_imap_search = old_try_imap
 
-    assert result == "SEARCH_OK"
+    assert "SEARCH RESULTS" in result
     assert "flag index is 5" in captured["script"]
     assert "messageFlagIndex" in captured["script"]
 

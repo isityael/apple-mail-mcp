@@ -33,6 +33,8 @@ create/
 # MCP Development
 .mcp.local.json
 .claude/settings.local.json
+.claude/worktrees/
+docs/superpowers/plans/
 
 # Build artifacts
 apple-mail-mcpb/build/

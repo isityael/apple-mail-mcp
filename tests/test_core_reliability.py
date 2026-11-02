@@ -111,7 +111,7 @@ def test_run_applescript_timeout_error_message():
         try:
             run_applescript("slow script", timeout=30)
             raise AssertionError("Should have raised")
-        except Exception as e:
+        except RuntimeError as e:
             msg = str(e)
             assert "30s" in msg
             assert "IMAP" in msg or "narrowing" in msg
@@ -162,8 +162,8 @@ def test_run_applescript_deregisters_after_unexpected_error():
         try:
             run_applescript("return 1")
             raise AssertionError("Should have raised")
-        except Exception:
-            pass
+        except RuntimeError:
+            assert proc.killed or proc.waited
 
     with core._inflight_lock:
         assert proc not in core._inflight_children
@@ -176,7 +176,7 @@ def test_run_applescript_raises_on_stderr():
         try:
             run_applescript("bad")
             raise AssertionError("Should have raised")
-        except Exception as e:
+        except RuntimeError as e:
             assert "bad script" in str(e)
 
 

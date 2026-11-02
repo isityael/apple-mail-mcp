@@ -1,170 +1,220 @@
 # Changelog
 
-All notable changes to the Apple Mail MCP Server will be documented in this file.
+All notable changes to **mcp-apple-mail** are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-- **Read-only mode**: `--read-only` runtime flag plus packaged `.mcpb` toggle to hide send-capable tools and block draft sending
-- **HTML compose support**: `compose_email` now accepts `body_html` for rich Mail.app composition
-- **Automated release notes**: tag pipelines now generate GitHub release notes from commit history and attach them to releases
-
-### Changed
-- **CI/CD**: Migrated to a single Woodpecker pipeline in `.woodpecker.yml` and removed the GitHub Actions workflow
-- **Reply robustness**: `reply_to_email` now uses temp-file-backed body loading, fixed reply-to-all AppleScript syntax, and preserves quoted originals better in open mode
-- **Search performance**: native Mail `whose` filtering is now used for body-search paths where feasible without changing the existing search tool APIs
-- **Release artifacts**: tag builds now produce version-matched `.mcpb` archives, checksums, and published GitHub release assets from Woodpecker
-
-## [2.1.0] - 2026-03-11
+## [3.3.0] - 2026-10-28
 
 ### Added
-- **Merged upstream `patrickfreyer/apple-mail-mcp`** through commit `5a0bc15` — all upstream features since the v2.0.0 fork divergence
-- **8 new upstream tools**: `search_emails_advanced`, `create_mailbox`, `archive_emails`, `mark_emails`, `delete_emails`, `get_awaiting_reply`, `get_needs_response`, `get_top_senders` (via `bulk.py` and `smart_inbox.py`)
-- **Upstream `bulk_move_emails`** with dry-run and filter requirements (replaces fork's simpler AppleScript version)
-- **Security hardening** from upstream: `escape_applescript` handles `\r\n` normalisation, `_sanitize_for_json()` for MCP transport safety, `save_email_attachment` path validation, `export_emails` cap, bulk operation safety guards
-- **`whose` clause performance** from upstream — faster searches in large mailboxes
-- **Attachment support**: `list_email_attachments`, `save_email_attachment` with security path validation
-- **Open/draft modes** for compose, reply, and manage_drafts
-- **`parse_email_list()`** and `build_*` helpers in core.py from upstream
+- `list_email_attachments` and `save_email_attachment` accept `message_id` (the id `search_emails` returns) and `mailbox`, looking the message up directly instead of by subject, so recurring subjects can't pick the wrong month (#128 by @proscar87).
+- `read_email(account, message_id, mailbox)` returns one message as headers, plain-text body and attachment list, looked up directly by the id `search_emails` returns, with the body capped at `max_chars` and the cut stated (#128 by @proscar87).
 
-### Changed
-- Tool count updated to 37 (from 29): 35 upstream + 2 IMAP sort tools
-- Manifest version bumped to 2.1.0
-- `core.py` now includes upstream's `build_mailbox_ref()`, `build_filter_condition()`, `build_date_filter()`, `build_email_fields_script()` alongside fork's `get_mailbox_script()` and `recipients_script()`
-- `__main__.py` now registers all 8 tool modules
-
-### Preserved from fork
-- **IMAP backend** (`imap.py`): Direct IMAP operations with SSL/STARTTLS/plain fallback for Proton Bridge
-- **IMAP sort tools** (`imap_sort.py`): `sort_inbox` and `imap_bulk_move` for fast rule-based sorting
-- **CI/CD**: GitHub Actions and Woodpecker pipelines
-- **Packaging**: `pyproject.toml` + `uv.lock` (no `requirements.txt`)
-- **Skill plugin**: `skill-email-management/` with Claude Code plugin structure
-- **Renovate**: Automated dependency updates
-
-## [2.0.0] - 2026-03-05
-
-### Added
-- **IMAP-based inbox sorting** (`sort_inbox`): Sort emails into folders using IMAP with Proton Bridge support (SSL/STARTTLS/plain fallback)
-- **IMAP bulk move** (`imap_bulk_move`): Batch move emails between IMAP folders with RFC 6851 MOVE support
-- **Bulk move emails** (`bulk_move_emails`): AppleScript-based bulk move for folder merging and inbox triage
-- **CI/CD pipelines**: GitHub Actions (`.github/workflows/ci.yml`) and Woodpecker CI (`.woodpecker/`) with lint, format check, syntax/import validation, mcpb build, and release-on-tag
-- **CLAUDE.md**: Project instructions for Claude Code with architecture docs and development patterns
-
-### Changed
-- **Modular package refactoring**: Split monolithic `apple_mail_mcp.py` into `apple_mail_mcp/` package with `server.py`, `core.py`, `constants.py`, `imap.py`, and `tools/` submodules
-- **Core hardened**: Deduplicated AppleScript helpers into `core.py` (`get_mailbox_script()`, `recipients_script()`, `inbox_mailbox_script()`, `date_cutoff_script()`, `content_preview_script()`, `skip_folders_condition()`)
-- **Migrated to `pyproject.toml` + `uv sync`** from `requirements.txt`
-- Tool count updated to 29 (from 26)
+### Security
+- The write-path denylist now also checks the path as requested, not only its
+  symlink target. A symlink inside a protected folder (e.g.
+  `/opt/homebrew/bin/python3`) resolves outside it, so writing through it was
+  allowed (#125 by @proscar87, follow-up to #103).
+- Hardened the file-path guard for file-writing tools (#103, follow-up to #19).
+  The old denylist missed shell startup files, so a prompt-injected
+  `save_email_attachment(save_path="~/.zshrc")` could plant an attacker-supplied
+  attachment that ran on the next shell. `save_email_attachment`,
+  `export_emails` and `create_rich_email_draft`'s `output_path` (previously
+  unchecked) now refuse every dotfile and dot-folder directly in `$HOME`
+  (`~/.zshrc`, `~/.ssh`, `~/.gitconfig`, `~/.config`, `~/.netrc`, ...),
+  `.git/hooks`, `.git/config` and `.envrc` anywhere, autostart and persistence
+  locations (`~/Library/LaunchAgents`, `/Library/LaunchDaemons`,
+  `~/Library/Application Support`, `~/Library/Preferences`, ...) and `PATH`
+  folders (`~/bin`, `/usr/local/bin`, `/opt/homebrew/bin`). Everything else
+  stays writable, including paths outside `$HOME` such as the temp dir.
+- Attachment paths for `compose_email` and `reply_to_email` may now be any
+  readable file (previously `$HOME` only) except secrets: `~/.ssh`, `~/.gnupg`,
+  `~/.aws`, `~/.netrc`, git/cloud credentials, `.env` files,
+  `~/Library/Keychains` and browser profiles and cookie stores.
+- New opt-in restriction: `APPLE_MAIL_MCP_WRITE_DIRS` and
+  `APPLE_MAIL_MCP_ATTACH_DIRS` (colon-separated), or the repeatable
+  `--write-dir` / `--attach-dir` flags, confine writes or attachments to the
+  listed folders; the denylist still applies inside them.
+- All checks live in one shared module (`apple_mail_mcp/paths.py`) instead of
+  three copies, resolve `..` and symlinks before checking, and compare
+  case-insensitively to match APFS (`~/.ZSHRC` is `~/.zshrc`).
 
 ### Fixed
-- IMAP modified UTF-7 encoding for international mailbox names
-- IMAP config file support (`~/.config/apple-mail-mcp/imap.json`)
-- Multiple CI lint failures and Woodpecker YAML escaping issues
-- Ruff lint errors in `ui/dashboard.py`
+- `list_inbox_emails` in text output and `get_mailbox_unread_counts(summary_only=True)`
+  ignored `account` and returned every account; they now filter by it
+  (#135 by @proscar87).
+- `search_emails` on a mailbox over the whose-clause limit now stops its
+  bounded index scan at the first message outside a `date_from` window
+  (newest-first) or `date_to` window (oldest-first), instead of reading the
+  full 4000-message cap. A one-week search of a 6,000-message mailbox no
+  longer holds the automation lock for minutes (#133 by
+  @joel-alturaeducation, related to #87 and #132).
+- The Claude Code plugin manifests (`plugin/.claude-plugin/plugin.json`,
+  `.claude-plugin/marketplace.json`) were stuck at 3.1.2, so `claude plugin
+  update` reported installs as current. They are now at 3.2.1 and
+  `scripts/check_versions.py` and `RELEASING.md` cover them (#127 by
+  @proscar87).
+- `move_email` no longer treats a negative `older_than_days` as a filter (it
+  added no date condition, so the call moved everything), and `manage_trash`
+  rejects an unrecognised `action` instead of falling through to
+  `move_to_trash` (#124 by @proscar87).
+- `reply_to_email` now restores the user's clipboard. The restore step sat
+  after the script's `return`, so it never ran and every reply (send, draft
+  or open) left the reply body on the clipboard. The error path now restores
+  it too, as does `forward_email`'s error path when a `message` was pasted
+  (#106).
 
-## [1.6.1] - 2026-03-10
-
-### Security (upstream)
-
-- **`escape_applescript` now escapes newlines and tabs** -- prevents AppleScript syntax errors when user input contains `\n`, `\r`, or `\t` characters
-- **`empty_trash` now enforces `max_deletes` limit** -- added `confirm_empty` boolean parameter; action is rejected unless explicitly confirmed
-- **Bulk operations require filters** -- `manage_trash` (move_to_trash, delete_permanent) and `update_email_status` now require at least one filter (`subject_keyword` or `sender`), or explicit `apply_to_all=True`, to prevent accidental bulk modifications
-- **`save_email_attachment` path validation** -- save path must resolve under the user's home directory; writes to `~/.ssh`, `~/.aws`, `~/Library/LaunchAgents`, and other sensitive directories are blocked
-- **`export_emails` entire mailbox cap** -- added `max_emails` parameter (default: 1000) to prevent unbounded exports when `scope="entire_mailbox"`
-- **Pinned dependency versions** -- `requirements.txt` now uses exact versions (`fastmcp==3.1.0`, `mcp-ui-server==1.0.0`) instead of open-ended `>=` ranges
-
-## [1.6.0] - 2026-02-06
-
-### Added
-- **CC/BCC support on `reply_to_email`**: Optional `cc` and `bcc` parameters for adding recipients when replying
-- **CC/BCC support on `forward_email`**: Optional `cc` and `bcc` parameters for adding recipients when forwarding
-- **`get_recent_from_sender`**: Retrieve recent emails from a sender with human-friendly time filters (today, week, month, all)
-- **`inbox_dashboard`**: Interactive UI dashboard resource for compatible MCP clients (requires `mcp-ui-server`)
-
-### Changed
-- AppleScript execution now uses **stdin pipe** (`osascript -` with `subprocess.run(input=...)`) instead of `-e` flag, fixing reliability issues with multi-line scripts and special characters
-- Improved error surfacing: AppleScript stderr is now properly captured and raised
-- Tool count updated to 26 (from 25)
-- README fully rewritten for conciseness and scannability
+## [3.2.1] - 2026-10-15
 
 ### Fixed
-- Multi-line AppleScript commands that previously failed due to shell escaping now execute reliably via stdin
-- AppleScript timeout handling consolidated (120s default)
+- The server failed to start on any fresh install since the `mcp` SDK 2.0
+  release (`ModuleNotFoundError: No module named 'mcp.server.fastmcp'`, #97).
+  `server.py` imported `FastMCP` from the SDK's bundled v1 module instead of
+  from the declared `fastmcp` dependency, so once `fastmcp` 4.x pulled in
+  `mcp` 2.x the import path vanished. Now imports `from fastmcp import
+  FastMCP`. `--read-only` also called `FastMCP.remove_tool()`, which is
+  deprecated in fastmcp 3.x and removed in 4.x; it now goes through
+  `local_provider.remove_tool()`, which both support.
+- `search_emails` no longer hangs Mail or returns nothing on very large
+  mailboxes such as a Gmail INBOX (#41, #87). Above 5,000 messages the full
+  `whose` scan is skipped in favour of a bounded index scan (newest first for
+  `date_desc`), capped at 4,000 messages per call; when the cap is reached
+  the response says so (`scan_limited` in JSON, a NOTE line in text) instead
+  of silently returning less. Body-text search on large mailboxes is bounded
+  too.
+- Reply and forward drafts render in the intended sans-serif font instead of
+  Mail's small serif default (#100, #101). The reply/forward HTML now carries
+  an explicit font style rather than `font: inherit`.
+- Removed the redundant `plugin/commands/email-management.md` slash command.
+  It shadowed `plugin/skills/email-management/` under the same
+  `apple-mail:email-management` listing key, so every session showed two
+  near-duplicate entries with different descriptions (#82). Claude Code
+  invokes skills directly as slash commands, so `/email-management` still
+  works via the skill alone.
+- `create_rich_email_draft`'s `save_as_draft` no longer claims or silently
+  retries a save that can never succeed. Mail opens a `.eml` as a read-only
+  message viewer, not a compose object, so the AppleScript `every outgoing
+  message whose subject is ...` query can never match it — the old retry
+  loop always returned `False` after ~5s of polling (#83). The tool now
+  skips the futile retry and reports plainly that `save_as_draft` isn't
+  supported for this workflow, pointing to `compose_email(mode="draft")` or
+  `manage_drafts` for a real, sendable HTML draft.
 
-## [1.5.0] - 2026-02-01
+## [3.2.0] - 2026-07-04
 
 ### Added
-- **search_by_sender**: Find emails from a specific sender across mailboxes
-- **search_all_accounts**: Cross-account search with advanced filtering
-- **search_email_content**: Full-text search in email bodies
-- **get_newsletters**: Find newsletter and subscription emails
+- **`get_email_source`** — new tool exposing an email's raw RFC 822 source
+  (full headers + MIME body) for debugging threading, authentication results,
+  and encoding issues (#66). Supports a `headers_only` mode and a configurable
+  byte cap with an explicit truncation marker so huge messages can't flood the
+  context. Uses Mail's `message id` property and resolves localized inbox
+  names via `build_mailbox_ref`.
+- **`list_inbox_emails` now surfaces `message_id`, `internet_message_id` and a
+  `mail_link`** in both its JSON and text output, matching `search_emails`
+  (#76) — inbox listings can be cited as Apple Mail deep links
+  (`message://…`) and targeted by id without a second lookup.
+  Backward-compatible with older 5-field records.
+
+### Fixed
+- **Stored XSS in the inbox dashboard** (#77). Attacker-controlled email
+  subjects/senders containing `</script>` could break out of the dashboard's
+  embedded JSON `<script>` block and inject arbitrary HTML. JSON injected into
+  the template now escapes `<`, `>`, `&`, and U+2028/U+2029; remaining
+  unescaped template interpolations in the account cards were also fixed.
+- **Umlauts, ß, and emoji no longer garble when pasting HTML bodies into
+  Mail** (#79). The Cocoa HTML→RTF importer auto-detected the charset and
+  defaulted to Latin-1, double-decoding UTF-8 bytes into mojibake
+  ("Grüße" → "GrÃ¼ÃŸe") on both the plain and HTML compose paths. The
+  importer is now pinned to UTF-8 via `NSCharacterEncodingDocumentAttribute`.
+
+## [3.1.8] - 2026-06-23
+
+### Fixed
+- **HTML replies/compositions no longer paste the body twice** (a rendered
+  copy plus a second copy of the raw `<p>`/`<b>` source). `reply_to_email`,
+  `compose_email`, and `forward_email` placed the raw HTML *source* on the
+  clipboard under `NSPasteboardTypeHTML`; for any HTML that wasn't a complete
+  document, Mail rendered it AND surfaced the literal markup, so the message
+  appeared twice. The body is now converted to an `NSAttributedString` and
+  written back as RTF (a single unambiguous rich-text flavor) plus a
+  *rendered* plain-text fallback. `create_rich_email_draft` was unaffected
+  (it already builds a proper multipart/alternative `.eml`).
+
+### Added
+- **Release workflow now builds and attaches the `.mcpb` bundle** to the GitHub
+  Release automatically on each tag (verifies the bundle contains the
+  `apple_mail_mcp` package and doesn't leak `venv/`/`__pycache__`).
+- **`scripts/extract_changelog.py`** — pulls the current version's section from
+  this file to use as the GitHub Release body.
+
+## [3.1.7] - 2026-06-12
+
+First 3.x release actually published to PyPI. Versions 3.0.0–3.1.6 were tagged
+in git but never uploaded, so PyPI remained stuck on the broken 2.2.0 wheel and
+`uvx mcp-apple-mail` kept failing with `ModuleNotFoundError: No module named
+'apple_mail_mcp'`. This release ships the (already-correct) `plugin/` packaging
+to PyPI and adds automation so a release can never again be built-but-not-shipped.
+
+### Fixed
+- **PyPI now serves a working wheel** that contains the `apple_mail_mcp/`
+  package. Resolves the user-facing failure reported in #42 and #57.
+
+### Added
+- **Release automation via PyPI Trusted Publishing** (`.github/workflows/release.yml`).
+  Pushing a `vX.Y.Z` tag builds, verifies, and publishes via OIDC — no API
+  tokens stored. The build fails closed if the tag doesn't match the version or
+  the wheel is missing the package.
+- **CI packaging guard** (`.github/workflows/ci.yml`) — every push/PR builds the
+  wheel and runs `verify_wheel.py`, plus the test suite on Python 3.10–3.13.
+- **`scripts/verify_wheel.py`** — pre-publish artifact guard. Inspects a wheel
+  for the `apple_mail_mcp/` package and payload size, then does a clean-venv
+  install + import + entry-point check. Catches the 2.2.0-style "dist-info only"
+  regression before it ships.
+- **This `CHANGELOG.md`** (previously linked from `pyproject.toml` but missing)
+  and **`RELEASING.md`** documenting the release flow and one-time PyPI setup.
+
+### Notes
+- The README's `uvx mcp-apple-mail` package name is correct — `mcp-apple-mail`
+  is this project's PyPI distribution. (The similarly named `apple-mail-mcp` on
+  PyPI is an unrelated package by a different author.) Issue #57's suggested
+  rename would have pointed users at the wrong package, so it was not applied.
+
+## [3.0.0] – [3.1.6] - 2026-03-27 → 2026-06-09 (git tags only, never on PyPI)
+
+These versions were released as GitHub tags/MCPB bundles but were never uploaded
+to PyPI. Highlights from this line, now reaching PyPI users via 3.1.7:
+
+### Fixed
+- Corrected `pyproject.toml` for the `plugin/` package layout so the wheel
+  includes the `apple_mail_mcp/` package (the root fix for the 2.2.0 bug).
+- Stop a Mail relaunch loop; prevent orphaned `osascript` from pinning Mail's
+  main thread; poll for Mail focus before pasting to avoid silent empty sends.
+- Attach files after the HTML paste so `Cmd+A` doesn't clobber them; scope
+  `reply_to_email` attachment inserts to the reply message.
+- Produce working Apple Mail deep links from search results; strip CDATA
+  wrappers from body content; support localized inbox names (FR/DE/ES/IT/PT/NL/JA).
+- Respect account default sender and allow `from_address` override.
+
+### Added
+- `synchronize_account` and `list_account_addresses` tools; `mail_link` in
+  default search output.
+- Version drift guard (`scripts/check_versions.py`) and `server.json` for MCP
+  Registry validation.
+- Plugin/marketplace distribution layout (`plugin/`), `/email-management` slash
+  command.
 
 ### Changed
-- Updated manifest to include 4 new search tools (total: 24 tools)
-- Enhanced search capabilities across the server
+- Consolidated tools: 10 search tools → 2 (`search_emails` + `get_email_thread`);
+  merged bulk operations into `manage.py`; trimmed verbose tool responses.
 
-## [1.4.0] - 2025-10-14
+## [2.2.0] - 2026-03-27 (broken on PyPI — superseded by 3.1.7)
 
-### Added
-- **User Preferences Configuration**: New configurable preference string in MCPB user_config
+> **Do not use.** This wheel shipped only the dist-info and console-script entry
+> point, not the `apple_mail_mcp/` package, so the server crashes on startup
+> with `ModuleNotFoundError`. Fixed in 3.1.7. (Reported in #42, #57.)
 
-### Changed
-- Updated manifest.json to include user_config section (version 1.4.0)
-- Enhanced all 20 tool functions with @inject_preferences decorator
-
-## [1.3.0] - 2025-10-14
-
-### Added
-- **search_emails**, **update_email_status**, **manage_trash**, **forward_email**, **get_email_thread**, **manage_drafts**, **get_statistics**, **export_emails** (8 new tools)
-
-### Changed
-- Updated manifest to include all 8 new tools (total: 20 tools)
-
-## [1.2.0] - 2025-10-14
-
-### Added
-- **get_inbox_overview**: Email preview section
-
-## [1.1.0] - 2025-10-14
-
-### Added
-- **get_inbox_overview**: Comprehensive inbox dashboard
-
-## [1.0.0] - 2025-10-14
-
-### Added
-- Initial release of Apple Mail MCP Server
-
----
-
-## Version History Summary
-
-- **v2.1.0** - Merged upstream (8 new tools, security hardening, `whose` clause perf, attachments, open/draft modes, smart inbox). Total: 37 tools
-- **v2.0.0** - Modular refactoring, IMAP sorting/bulk-move tools, CI/CD (GitHub Actions + Woodpecker), pyproject.toml migration
-- **v1.6.1** - Security hardening: input escaping, path validation, bulk operation safeguards, export caps, dependency pinning
-- **v1.6.0** - CC/BCC on reply/forward, stdin-based AppleScript execution, interactive dashboard, README rewrite
-- **v1.5.0** - Advanced search tools (4 new tools)
-- **v1.4.0** - User preferences configuration
-- **v1.3.0** - Major feature expansion (8 new tools)
-- **v1.2.0** - Enhanced overview with email preview
-- **v1.1.0** - Added inbox overview dashboard
-- **v1.0.0** - Initial release with core functionality
-
-## Upgrade Notes
-
-### Upgrading to 2.1.0
-- No breaking changes from 2.0.0
-- 8 new tools available immediately (bulk ops, smart inbox, advanced search, create_mailbox, archive)
-- Bulk operations now have stricter safety guards (dry_run defaults, filter requirements)
-- CI tool-count assertions updated from 29 to 37
-- Rebuild `.mcpb` bundle to include new tools
-
-### Upgrading to 2.0.0
-- **Breaking**: Entry point is now `apple_mail_mcp/` package instead of monolithic `apple_mail_mcp.py`
-- **Breaking**: Dependencies managed via `pyproject.toml` + `uv sync` (replaces `requirements.txt`)
-- `start_mcp.sh` handles setup automatically
-- 3 new IMAP tools require IMAP config for Proton Bridge (`~/.config/apple-mail-mcp/imap.json` or env vars)
-- Rebuild `.mcpb` bundle to include new tools
+[3.1.7]: https://github.com/patrickfreyer/apple-mail-mcp/releases/tag/v3.1.7
+[2.2.0]: https://github.com/patrickfreyer/apple-mail-mcp/releases/tag/v2.2.0

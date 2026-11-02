@@ -1,18 +1,18 @@
 {
   "dxt_version": "0.1",
   "name": "Apple Mail MCP",
-  "version": "2.6.2",
-  "description": "IMAP-first email management for Apple Mail with 38 tools — IMAP-accelerated search with recipient filtering, cross-account moves, HTML/plain-text composition, bulk operations, smart inbox analytics, folder management, IMAP sorting, account sync, and optional read-only mode.",
+  "version": "3.3.0",
+  "description": "Natural language interface for Apple Mail with 43 tools \u2014 email search, composition, bulk operations, smart inbox analytics, folder management, and security-hardened destructive operations. Includes Email Management Expert Skill and Interactive UI Dashboard.",
   "author": {
-    "name": "isityael"
+    "name": "Patrick Freyer"
   },
   "license": "MIT",
-  "homepage": "https://github.com/isityael/apple-mail-mcp",
+  "homepage": "https://github.com/patrickfreyer/apple-mail-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/isityael/apple-mail-mcp.git"
+    "url": "https://github.com/patrickfreyer/apple-mail-mcp.git"
   },
-  "documentation": "https://github.com/isityael/apple-mail-mcp#readme",
+  "documentation": "https://github.com/patrickfreyer/apple-mail-mcp#readme",
   "user_config": {
     "user_preferences": {
       "type": "string",
@@ -20,13 +20,6 @@
       "description": "Your personal email preferences that will be provided to the AI assistant when using email tools (e.g., 'Default to BCG account, show max 50 emails, prefer Archive folder')",
       "required": false,
       "default": ""
-    },
-    "read_only": {
-      "type": "boolean",
-      "title": "Read-Only Mode",
-      "description": "Disable tools that send email. Draft listing, creation, opening, and deletion remain available, but sending is blocked.",
-      "required": false,
-      "default": false
     }
   },
   "server": {
@@ -38,79 +31,58 @@
         "${__dirname}/start_mcp.sh"
       ],
       "env": {
-        "USER_EMAIL_PREFERENCES": "${user_config.user_preferences}",
-        "APPLE_MAIL_MCP_READ_ONLY": "${user_config.read_only}"
+        "USER_EMAIL_PREFERENCES": "${user_config.user_preferences}"
       }
     }
   },
   "tools": [
     {
-      "name": "get_inbox_overview",
-      "description": "Get a comprehensive dashboard overview of your email inbox status across all accounts. Shows unread counts by account, mailbox structure with unread indicators, preview of recent emails, and provides AI-driven action suggestions."
-    },
-    {
       "name": "list_inbox_emails",
       "description": "List all emails from inbox across all accounts or a specific account. Filter by account name, limit number of emails, and filter read/unread status. Supports JSON output format."
     },
     {
-      "name": "get_email_with_content",
-      "description": "Search for emails by subject keyword and return with full content preview. Search within specific account with configurable content length."
-    },
-    {
-      "name": "get_unread_count",
-      "description": "Get the count of unread emails for each account. Quick overview of unread emails across all Mail accounts."
+      "name": "get_mailbox_unread_counts",
+      "description": "Get unread counts per mailbox for one account or all accounts.\n\nWhen summary_only=True, returns only per-account inbox unread totals\n(replaces the former get_unread_count tool)."
     },
     {
       "name": "list_accounts",
       "description": "List all available Mail accounts configured in Apple Mail."
     },
     {
-      "name": "get_recent_emails",
-      "description": "Get the most recent emails from a specific account. Optional content preview with configurable count. Supports JSON output format."
+      "name": "list_account_addresses",
+      "description": "List all configured email addresses for each Mail account.\n\nUseful for mapping a Mail.app account name (e.g. \"Gmail\", \"Work\") to the\nactual email address(es) it receives mail at \u2014 handy when an integration\nneeds to know which inbox a message landed in by address rather than by\nMail.app's display name."
     },
     {
       "name": "list_mailboxes",
       "description": "List all mailboxes (folders) for a specific account or all accounts. Shows folder structure with optional message counts."
     },
     {
-      "name": "move_email",
-      "description": "Move emails between mailboxes by searching for subject keywords. Supports nested mailboxes with path notation (e.g., 'Projects/Amplify Impact')."
+      "name": "get_inbox_overview",
+      "description": "Get a comprehensive dashboard overview of your email inbox status across all accounts. Shows unread counts by account, mailbox structure with unread indicators, preview of recent emails, and provides AI-driven action suggestions."
     },
     {
-      "name": "reply_to_email",
-      "description": "Reply to emails matching a subject keyword. Send reply or save as draft with custom body and option to reply to all recipients. Supports CC/BCC and attachments."
+      "name": "get_unread_count",
+      "description": "Get the count of unread emails for each account. Quick overview of unread emails across all Mail accounts."
     },
     {
-      "name": "compose_email",
-      "description": "Compose and send a new email from a specific account. Supports TO, CC, BCC, attachments, open/draft modes, and optional HTML body content."
-    },
-    {
-      "name": "forward_email",
-      "description": "Forward emails matching a subject keyword to specified recipients. Optionally prepend a custom message. Supports CC/BCC."
-    },
-    {
-      "name": "list_email_attachments",
-      "description": "List attachments for emails matching a subject keyword. Shows attachment names and sizes."
-    },
-    {
-      "name": "save_email_attachment",
-      "description": "Save a specific attachment from an email to disk. Validates save path for security — blocks writes to sensitive directories."
+      "name": "get_recent_emails",
+      "description": "Get the most recent emails from a specific account. Optional content preview with configurable count. Supports JSON output format."
     },
     {
       "name": "search_emails",
       "description": "Advanced unified email search with multiple filter options. Search by subject keyword, sender, attachment presence, read status, and date ranges. Supports JSON output format."
     },
     {
-      "name": "search_emails_advanced",
-      "description": "Unified search with 12 filter parameters: account, mailbox, subject, body, sender, date range, read status, attachments, flagged status. Supports multi-account search and JSON output."
+      "name": "get_email_thread",
+      "description": "View email conversation threads by finding all related messages. Groups messages with matching subjects across all mailboxes."
+    },
+    {
+      "name": "get_email_with_content",
+      "description": "Search for emails by subject keyword and return with full content preview. Search within specific account with configurable content length."
     },
     {
       "name": "search_by_sender",
       "description": "Find emails from a specific sender across mailboxes. Search by sender email address or name."
-    },
-    {
-      "name": "search_all_accounts",
-      "description": "Cross-account search with advanced filtering. Search across all configured email accounts with date range and sorting."
     },
     {
       "name": "search_email_content",
@@ -125,56 +97,68 @@
       "description": "Retrieve recent emails from a specific sender with human-friendly time filters (today, week, month, all)."
     },
     {
-      "name": "get_email_thread",
-      "description": "View email conversation threads by finding all related messages. Groups messages with matching subjects across all mailboxes."
+      "name": "search_all_accounts",
+      "description": "Cross-account search with advanced filtering. Search across all configured email accounts with date range and sorting."
     },
     {
-      "name": "update_email_status",
-      "description": "Update email status in batch — mark as read/unread, flag/unflag. Requires at least one filter or explicit apply_to_all for safety."
+      "name": "search_emails_advanced",
+      "description": "Unified search with 12 filter parameters: account, mailbox, subject, body, sender, date range, read status, attachments, flagged status. Supports multi-account search and JSON output."
     },
     {
-      "name": "manage_trash",
-      "description": "Manage email deletion: move_to_trash, delete_permanent, empty_trash. Requires filters for safety. empty_trash requires confirm_empty=True."
+      "name": "get_email_source",
+      "description": "Return the raw RFC 822 source of a single message.\n\nThe MCP's other body-extraction paths return Mail.app's rendered content\n(HTML collapsed to display text, hrefs dropped, embedded objects replaced\nwith U+FFFC). This tool returns the raw source instead \u2014 all headers, all\nMIME parts, all hrefs intact.\n\nImplementation note:\n--------------------\nWraps the ``source`` property of ``message`` defined in ``Mail.sdef``\n(the AppleScript dictionary for Mail.app). That property returns the\nsame RFC 822 text Mail.app writes to the on-disk ``.partial.emlx`` file,\nso the consumer does not need filesystem access or knowledge of the\nMail directory layout to recover MIME parts / hrefs / custom headers.\n\nIdentifier resolution: ``message_id`` is preferred when both are provided\n(exact match on the RFC 822 ``Message-Id`` header via AppleScript's\n``message id`` property \u2014 distinct from ``id``, which is Mail.app's\ninternal numeric id). ``subject_keyword`` matches the first message in\n``mailbox`` whose subject contains the substring.\n\nOutput sizing: messages can be large (a plain note is ~200 KB; with\nattachments far larger). ``max_bytes`` caps the returned payload and\nappends a truncation marker when exceeded. ``headers_only=True`` returns\nonly the RFC 822 header block (everything up to and including the first\nblank line) \u2014 usually sufficient for URL/header inspection and avoids\nreturning base64 bodies. Cap applies after the headers_only filter."
+    },
+    {
+      "name": "create_rich_email_draft",
+      "description": "Create a rich-text email draft by generating an unsent `.eml` message and optionally opening it in Mail.\n\nThis is the preferred path for HTML or richly formatted emails because Mail reliably renders `.eml`\ncontent, while setting raw HTML through AppleScript often stores the literal markup instead."
+    },
+    {
+      "name": "reply_to_email",
+      "description": "Reply to emails matching a subject keyword. Send reply or save as draft with custom body and option to reply to all recipients. Supports CC/BCC and attachments."
+    },
+    {
+      "name": "compose_email",
+      "description": "Compose and send a new email from a specific account. Supports TO, CC, BCC, attachments, open/draft modes, and optional HTML body content."
+    },
+    {
+      "name": "forward_email",
+      "description": "Forward emails matching a subject keyword to specified recipients. Optionally prepend a custom message. Supports CC/BCC."
     },
     {
       "name": "manage_drafts",
       "description": "Complete draft management: list, create, send, open, and delete drafts. Supports full composition parameters (TO, CC, BCC)."
     },
     {
-      "name": "create_mailbox",
-      "description": "Create a new mailbox (folder) in a specified account. Supports nested paths and auto-creates parent folders."
+      "name": "move_email",
+      "description": "Move emails between mailboxes by searching for subject keywords. Supports nested mailboxes with path notation (e.g., 'Projects/Amplify Impact')."
     },
     {
-      "name": "archive_emails",
-      "description": "Move emails to Archive mailbox with safety features. Requires filters, dry_run=True by default, only_read=True by default, max 50 cap."
+      "name": "save_email_attachment",
+      "description": "Save a specific attachment from an email to disk. Validates save path for security \u2014 blocks writes to sensitive directories."
+    },
+    {
+      "name": "update_email_status",
+      "description": "Update email status in batch \u2014 mark as read/unread, flag/unflag. Requires at least one filter or explicit apply_to_all for safety."
+    },
+    {
+      "name": "manage_trash",
+      "description": "Manage email deletion: move_to_trash, delete_permanent, empty_trash. Requires filters for safety. empty_trash requires confirm_empty=True."
+    },
+    {
+      "name": "create_mailbox",
+      "description": "Create a new mailbox (folder) in a specified account. Supports nested paths and auto-creates parent folders."
     },
     {
       "name": "synchronize_account",
       "description": "Ask Apple Mail to synchronize one account or all accounts with bounded per-account timeouts so sync can continue asynchronously."
     },
     {
-      "name": "mark_emails",
-      "description": "Batch mark emails as read/unread/flagged/unflagged. Requires at least one filter (subject, sender, or date). Default max 50."
+      "name": "archive_emails",
+      "description": "Move emails to Archive mailbox with safety features. Requires filters, dry_run=True by default, only_read=True by default, max 50 cap."
     },
     {
-      "name": "delete_emails",
-      "description": "Soft-delete emails (move to Trash) with safety features. dry_run=True by default, required filters, max 25 limit."
-    },
-    {
-      "name": "bulk_move_emails",
-      "description": "Batch move emails matching filters to a target mailbox. Supports nested paths, required filters, max 50 limit."
-    },
-    {
-      "name": "get_awaiting_reply",
-      "description": "Find sent emails that haven't received a reply. Cross-references Sent and Inbox to identify follow-up opportunities."
-    },
-    {
-      "name": "get_needs_response",
-      "description": "Identify unread emails needing a response. Filters out newsletters and automated senders, assigns priority hints."
-    },
-    {
-      "name": "get_top_senders",
-      "description": "Rank senders by email frequency. Supports date range filtering and optional grouping by domain."
+      "name": "list_email_attachments",
+      "description": "List attachments for emails matching a subject keyword. Shows attachment names and sizes."
     },
     {
       "name": "get_statistics",
@@ -189,13 +173,41 @@
       "description": "Interactive UI dashboard for MCP Apps-compatible clients. Shows account cards, recent emails, and search. Requires mcp-ui-server."
     },
     {
+      "name": "get_awaiting_reply",
+      "description": "Find sent emails that haven't received a reply. Cross-references Sent and Inbox to identify follow-up opportunities."
+    },
+    {
+      "name": "get_needs_response",
+      "description": "Identify unread emails needing a response. Filters out newsletters and automated senders, assigns priority hints."
+    },
+    {
+      "name": "get_top_senders",
+      "description": "Rank senders by email frequency. Supports date range filtering and optional grouping by domain."
+    },
+    {
+      "name": "read_email",
+      "description": "Read headers, plain-text body and attachment metadata for one message.\n\nUse the numeric message_id returned by search_emails, not the RFC\nMessage-ID header. The lookup never scans messages. max_chars caps only\nthe body, with explicit truncation metadata. output_format is text or json.\nAttachment contents are never returned."
+    },
+    {
+      "name": "mark_emails",
+      "description": "Batch mark emails as read/unread/flagged/unflagged. Requires at least one filter (subject, sender, or date). Default max 50."
+    },
+    {
+      "name": "delete_emails",
+      "description": "Soft-delete emails (move to Trash) with safety features. dry_run=True by default, required filters, max 25 limit."
+    },
+    {
+      "name": "bulk_move_emails",
+      "description": "Batch move emails matching filters to a target mailbox. Supports nested paths, required filters, max 50 limit."
+    },
+    {
       "name": "sort_inbox",
       "description": "Sort inbox emails into folders by sender using IMAP. Fast rule-based sorting for Proton Bridge or other IMAP-accessible accounts. Supports dry-run, batch processing, and auto folder creation."
     },
     {
       "name": "imap_bulk_move",
-      "description": "Move emails between IMAP folders directly. Fast bulk move for Proton Bridge — useful for folder merging, inbox triage, and sender-based filtering."
+      "description": "Move emails between IMAP folders directly. Fast bulk move for Proton Bridge \u2014 useful for folder merging, inbox triage, and sender-based filtering."
     }
   ],
-  "prompts": [ ]
+  "prompts": []
 }

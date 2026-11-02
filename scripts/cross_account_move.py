@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import logging
 import sys
 import time
 from collections import defaultdict
@@ -63,6 +64,7 @@ def main() -> None:
         try:
             src_conn.select(f'"{folder}"', readonly=True)
         except Exception:
+            logging.getLogger(__name__).exception("Could not select source folder %s", folder)
             continue
 
         uids = imap_backend.imap_search(src_conn, criteria)
@@ -148,7 +150,7 @@ def main() -> None:
                     imap_backend.keepalive(src_conn)
                     imap_backend.keepalive(dst_conn)
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).exception("Could not expunge or keep IMAP connections alive")
                 since_expunge = 0
 
             if moved % 10 == 0 and moved > 0:

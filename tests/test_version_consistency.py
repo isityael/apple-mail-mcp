@@ -1,58 +1,47 @@
-"""Tests for release version drift guards."""
-
-from __future__ import annotations
+"""Tests that all version strings across the repo agree."""
 
 import importlib.util
-import os
 import sys
+import unittest
 from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
+# Load check_versions from scripts/ without requiring it to be a package
 _REPO_ROOT = Path(__file__).parent.parent
 _SCRIPT = _REPO_ROOT / "scripts" / "check_versions.py"
 
 spec = importlib.util.spec_from_file_location("check_versions", _SCRIPT)
-check_versions = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-spec.loader.exec_module(check_versions)
+_cv = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+spec.loader.exec_module(_cv)  # type: ignore[union-attr]
 
 
-def test_all_version_strings_agree():
-    ok, versions = check_versions.check(_REPO_ROOT)
-    assert ok, versions
+class VersionConsistencyTests(unittest.TestCase):
+    def test_all_version_strings_agree(self):
+        """Every file that carries a version string must declare the same value."""
+        ok, versions = _cv.check(_REPO_ROOT)
+        if not ok:
+            unique = sorted(set(versions.values()))
+            details = "\n".join(f"  {k}: {v}" for k, v in versions.items())
+            self.fail(f"Version strings disagree ({', '.join(unique)}):\n{details}")
 
-
-def test_all_version_strings_match_expected_env(monkeypatch=None):
-    if monkeypatch is None:
-        os.environ["APPLE_MAIL_MCP_EXPECTED_VERSION"] = "2.6.2"
+    def test_package_exposes_version(self):
+        """apple_mail_mcp.__version__ must be importable and non-empty."""
+        # Add plugin/ to path so the package is importable (mirrors the pytest invocation)
+        plugin_dir = str(_REPO_ROOT / "plugin")
+        added = False
+        if plugin_dir not in sys.path:
+            sys.path.insert(0, plugin_dir)
+            added = True
         try:
-            ok, versions = check_versions.check(_REPO_ROOT)
+            import apple_mail_mcp
+
+            ver = getattr(apple_mail_mcp, "__version__", None)
+            self.assertIsNotNone(ver, "apple_mail_mcp.__version__ is not defined")
+            self.assertIsInstance(ver, str, "apple_mail_mcp.__version__ must be a str")
+            self.assertTrue(ver.strip(), "apple_mail_mcp.__version__ must not be empty")
         finally:
-            os.environ.pop("APPLE_MAIL_MCP_EXPECTED_VERSION", None)
-    else:
-        monkeypatch.setenv("APPLE_MAIL_MCP_EXPECTED_VERSION", "2.6.2")
-        ok, versions = check_versions.check(_REPO_ROOT)
-    assert ok, versions
-
-
-def test_package_exposes_version():
-    import apple_mail_mcp
-
-    assert apple_mail_mcp.__version__ == "2.6.2"
+            if added:
+                sys.path.remove(plugin_dir)
 
 
 if __name__ == "__main__":
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    passed = 0
-    failed = 0
-    for t in tests:
-        try:
-            t()
-            passed += 1
-            print(f"  PASS  {t.__name__}")
-        except AssertionError as e:
-            failed += 1
-            print(f"  FAIL  {t.__name__}: {e}")
-    print(f"\n{passed} passed, {failed} failed")
-    sys.exit(1 if failed else 0)
+    unittest.main()

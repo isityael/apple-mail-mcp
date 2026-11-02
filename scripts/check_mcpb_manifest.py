@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -17,12 +18,12 @@ def _manifest_tool_names(repo_root: Path) -> list[str]:
     manifest = json.loads(manifest_path.read_text())
     tools = manifest.get("tools")
     if not isinstance(tools, list):
-        raise ValueError("apple-mail-mcpb/manifest.json field 'tools' must be a list")
+        raise TypeError("apple-mail-mcpb/manifest.json field 'tools' must be a list")
 
     names: list[str] = []
     for index, tool in enumerate(tools):
         if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
-            raise ValueError(f"manifest tool at index {index} must contain a string name")
+            raise TypeError(f"manifest tool at index {index} must contain a string name")
         names.append(tool["name"])
     return names
 
@@ -31,7 +32,7 @@ def _runtime_tool_names(repo_root: Path) -> list[str]:
     sys.path.insert(0, str(repo_root))
     from apple_mail_mcp import mcp
 
-    return sorted(mcp._tool_manager._tools)
+    return sorted(tool.name for tool in asyncio.run(mcp.list_tools()))
 
 
 def check(repo_root: Path | None = None) -> tuple[bool, list[str]]:
@@ -64,7 +65,7 @@ def check(repo_root: Path | None = None) -> tuple[bool, list[str]]:
 def main() -> None:
     try:
         ok, errors = check()
-    except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError) as exc:
+    except (FileNotFoundError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
 

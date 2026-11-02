@@ -47,6 +47,7 @@ def main() -> int:
             cwd=str(PROJECT_ROOT),
             text=True,
             capture_output=True,
+            check=False,
             timeout=30,
         )
         if result.returncode != 0:

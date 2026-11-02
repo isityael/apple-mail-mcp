@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "apple-mail": {
-      "command": "/path/to/apple-mail-mcp/start_mcp.sh"
-    }
-  }
-}

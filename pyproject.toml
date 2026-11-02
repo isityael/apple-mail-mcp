@@ -1,32 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "apple-mail-mcp"
-version = "2.6.2"
-description = "MCP server for managing Apple Mail"
+name = "mcp-apple-mail"
+version = "3.3.0"
+description = "MCP server giving AI assistants full access to Apple Mail - read, search, compose, organize & analyze emails"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
+authors = [
+    { name = "Patrick Freyer" },
+]
+keywords = [
+    "mcp",
+    "mcp-server",
+    "apple-mail",
+    "email",
+    "ai",
+    "claude",
+    "automation",
+    "macos",
+    "applescript",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+]
 dependencies = [
-    "fastmcp>=3.4.8,<4",
-    "mcp>=1.30.0,<2",
+    "fastmcp>=4.0.0,<5",
     "mcp-ui-server>=1.0.0",
 ]
 
+[project.scripts]
+mcp-apple-mail = "apple_mail_mcp.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/patrickfreyer/apple-mail-mcp"
+Repository = "https://github.com/patrickfreyer/apple-mail-mcp"
+Issues = "https://github.com/patrickfreyer/apple-mail-mcp/issues"
+Changelog = "https://github.com/patrickfreyer/apple-mail-mcp/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["plugin/apple_mail_mcp", "plugin/ui"]
+
+[tool.hatch.build.targets.sdist]
+include = ["plugin/apple_mail_mcp/**"]
+
 [dependency-groups]
-dev = [
-    "ruff>=0.16.0",
-]
+dev = ["ruff>=0.17.2", "pytest>=9"]
 
 [tool.ruff]
 target-version = "py314"
 line-length = 120
-exclude = [".claude/"]
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM"]
-
-[tool.ruff.lint.per-file-ignores]
-# AppleScript strings in tool modules are long by nature
-"apple_mail_mcp/tools/*.py" = ["E501"]
-# Connection cleanup and IMAP fallback patterns are clearer with try/except/pass
-"apple_mail_mcp/imap.py" = ["SIM105"]
-"apple_mail_mcp/tools/imap_sort.py" = ["SIM105"]
+exclude = [".claude/", "apple_mail_mcp"]

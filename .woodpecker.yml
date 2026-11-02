@@ -25,14 +25,13 @@ steps:
       - uv run python scripts/check_mcpb_manifest.py
       - uv run python scripts/check_codex_plugin_export.py
       - |
-        for t in tests/test_*.py; do
-          uv run python "$t"
-        done
+        uv run pytest -q
       - |
         uv run python << 'PYEOF'
+        import asyncio
         from apple_mail_mcp import mcp
-        n = len(mcp._tool_manager._tools)
-        assert n == 38, "Expected 38 tools, got %d" % n
+        n = len(asyncio.run(mcp.list_tools()))
+        assert n == 43, "Expected 43 tools, got %d" % n
         print("OK: %d tools registered" % n)
         PYEOF
 
@@ -75,7 +74,7 @@ steps:
       - bash apple-mail-mcpb/build-mcpb.sh
       - |
         n=$(jq '.tools | length' apple-mail-mcpb/manifest.json)
-        [ "$n" -eq 38 ] || { echo "ERROR: Expected 38 tools, got $n"; exit 1; }
+        [ "$n" -eq 43 ] || { echo "ERROR: Expected 43 tools, got $n"; exit 1; }
         echo "OK: $n tools in manifest"
       - |
         if [ -n "${CI_COMMIT_TAG}" ]; then
