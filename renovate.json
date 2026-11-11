@@ -50,13 +50,6 @@
       "versioning": "regex:^(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?(-alpine(?<build>\\d+\\.\\d+))?-(?<compatibility>dev)$"
     },
     {
-      "description": "Group semantic-release tooling",
-      "matchPackageNames": [
-        "/semantic-release/"
-      ],
-      "groupName": "semantic-release"
-    },
-    {
       "description": "Auto-merge patch and minor Python dependency updates",
       "matchManagers": [
         "pep621"
@@ -84,10 +77,42 @@
         "pinDigest"
       ],
       "enabled": false
+    },
+    {
+      "description": "One reviewed weekly dependency refresh, including majors, charts, images and tooling.",
+      "matchPackageNames": [
+        "*"
+      ],
+      "groupName": "weekly dependencies",
+      "groupSlug": "weekly-dependencies",
+      "groupSingleUpdates": true,
+      "minimumGroupSize": 1,
+      "additionalBranchPrefix": "",
+      "separateMajorMinor": false,
+      "separateMinorPatch": false,
+      "separateMultipleMajor": false,
+      "separateMultipleMinor": false,
+      "schedule": [
+        "* 0-5 * * 1"
+      ],
+      "automerge": false
     }
   ],
   "pinDigests": false,
   "ignorePresets": [
     "docker:pinDigests"
-  ]
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "* 0-5 * * 1"
+  ],
+  "separateMajorMinor": false,
+  "separateMinorPatch": false,
+  "separateMultipleMajor": false,
+  "separateMultipleMinor": false,
+  "prConcurrentLimit": 1,
+  "automerge": false,
+  "lockFileMaintenance": {
+    "enabled": false
+  }
 }
